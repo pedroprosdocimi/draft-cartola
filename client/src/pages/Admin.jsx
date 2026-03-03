@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { API_URL } from '../config.js';
+import SimDraft from '../components/SimDraft.jsx';
 
 const POS_LABELS = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA' };
 const POS_ORDER = [1, 2, 3, 4, 5];
@@ -438,6 +439,9 @@ export default function Admin({ onBack }) {
             </div>
 
           </div>
+
+          {/* ── Simulador de Draft ── */}
+          <SimDraft players={players} />
 
           {/* ── Tabela 2: Não cotados ── */}
           <div className="card">
