@@ -222,24 +222,24 @@ export default function Admin({ onBack }) {
       .sort((a, b) => (a.abbreviation || '').localeCompare(b.abbreviation || ''));
   }, [players]);
 
-  // Table 1: prováveis titulares, independent filters
-  const titulares = useMemo(() => {
+  // Table 1: pool do draft = prováveis (status_id=7) + adicionados manualmente
+  const poolDraft = useMemo(() => {
     const list = players
-      .filter(p => p.status_id === 7)
+      .filter(p => p.status_id === 7 || eligibleIds.has(p.cartola_id))
       .filter(p => tPos === 0  || p.position_id === tPos)
       .filter(p => tClub === 0 || p.club_id === tClub);
     return sortByPos(list);
-  }, [players, tPos, tClub]);
+  }, [players, eligibleIds, tPos, tClub]);
 
-  // Table 2: não cotados, independent filters, eligible float to top per position
+  // Table 2: não cotados que ainda NÃO foram adicionados ao pool
   const outros = useMemo(() => {
     const list = players
-      .filter(p => p.status_id !== 7)
+      .filter(p => p.status_id !== 7 && !eligibleIds.has(p.cartola_id))
       .filter(p => oPos === 0    || p.position_id === oPos)
       .filter(p => oStatus === 0 || p.status_id === oStatus)
       .filter(p => oClub === 0   || p.club_id === oClub);
-    return sortByPos(list, p => eligibleIds.has(p.cartola_id));
-  }, [players, oPos, oStatus, oClub, eligibleIds]);
+    return sortByPos(list);
+  }, [players, eligibleIds, oPos, oStatus, oClub]);
 
   return (
     <div className="min-h-screen p-4 max-w-4xl mx-auto">
@@ -317,17 +317,29 @@ export default function Admin({ onBack }) {
       ) : (
         <div className="space-y-6">
 
-          {/* ── Tabela 1: Prováveis titulares ── */}
+          {/* ── Tabela 1: Pool do Draft ── */}
           <div className="card">
             <h3 className="font-semibold text-green-400 mb-1 flex items-center gap-2">
-              ✅ Prováveis titulares
-              <span className="text-xs text-gray-500 font-normal">({titulares.length})</span>
+              ✅ Pool do Draft
+              <span className="text-xs text-gray-500 font-normal">({poolDraft.length})</span>
+              {eligibleIds.size > 0 && (
+                <span className="text-xs text-blue-400 font-normal">
+                  · {eligibleIds.size} adicionados manualmente
+                </span>
+              )}
             </h3>
-            <p className="text-xs text-gray-600 mb-3">Entram automaticamente no pool do draft</p>
+            <p className="text-xs text-gray-600 mb-3">
+              Prováveis titulares + jogadores adicionados manualmente
+            </p>
 
             {/* Filters */}
             <div className="space-y-2 mb-3">
-              <PosFilter value={tPos} onChange={setTPos} players={players} countStatus={7} />
+              <PosFilter
+                value={tPos}
+                onChange={setTPos}
+                players={players.filter(p => p.status_id === 7 || eligibleIds.has(p.cartola_id))}
+                countStatus={null}
+              />
               <div className="flex items-center gap-2">
                 <ClubSelect value={tClub} onChange={setTClub} clubs={clubs} />
                 {(tPos !== 0 || tClub !== 0) && (
@@ -341,17 +353,34 @@ export default function Admin({ onBack }) {
               </div>
             </div>
 
-            {titulares.length === 0 ? (
+            {poolDraft.length === 0 ? (
               <p className="text-gray-600 text-sm text-center py-4">Nenhum com os filtros atuais</p>
             ) : (
               <div className="divide-y divide-gray-800/50">
-                {titulares.map(p => (
-                  <PlayerRow
-                    key={p.cartola_id}
-                    player={p}
-                    match={clubMatches[p.club_id] || clubMatches[String(p.club_id)] || null}
-                  />
-                ))}
+                {poolDraft.map(p => {
+                  const isManual = eligibleIds.has(p.cartola_id);
+                  const isToggling = togglingId === p.cartola_id;
+                  return (
+                    <div
+                      key={p.cartola_id}
+                      className={isManual ? 'border-l-2 border-blue-500 rounded-r-lg' : ''}
+                    >
+                      <PlayerRow
+                        player={p}
+                        match={clubMatches[p.club_id] || clubMatches[String(p.club_id)] || null}
+                        action={isManual ? (
+                          <button
+                            onClick={() => handleToggleEligible(p.cartola_id)}
+                            disabled={isToggling}
+                            className="text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 border bg-blue-900/40 text-blue-300 hover:bg-red-900/40 hover:text-red-300 border-blue-700 hover:border-red-700"
+                          >
+                            {isToggling ? '...' : 'Remover'}
+                          </button>
+                        ) : null}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -361,11 +390,6 @@ export default function Admin({ onBack }) {
             <h3 className="font-semibold text-gray-400 mb-1 flex items-center gap-2">
               ⚠️ Não cotados como titulares
               <span className="text-xs text-gray-500 font-normal">({outros.length})</span>
-              {eligibleIds.size > 0 && (
-                <span className="text-xs text-blue-400 font-normal">
-                  · {players.filter(p => p.status_id !== 7 && eligibleIds.has(p.cartola_id)).length} adicionados ao draft
-                </span>
-              )}
             </h3>
             <p className="text-xs text-gray-600 mb-3">
               Adicione manualmente os jogadores que devem entrar no pool do draft
