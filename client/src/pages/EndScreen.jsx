@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 
-const POS_LABEL = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA', 6: 'TEC' };
+const POS_LABEL = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA' };
 const POS_COLORS = {
   1: 'text-yellow-400', 2: 'text-blue-400', 3: 'text-red-400',
-  4: 'text-purple-400', 5: 'text-green-400', 6: 'text-gray-400'
+  4: 'text-purple-400', 5: 'text-green-400',
 };
 const POS_ORDER = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4 };
 

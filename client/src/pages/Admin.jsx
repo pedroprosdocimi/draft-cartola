@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { API_URL } from '../config.js';
 
-const POS_LABELS = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA', 6: 'TEC' };
-const POS_ORDER = [1, 2, 3, 4, 5, 6];
-const POS_SORT = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5 };
+const POS_LABELS = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA' };
+const POS_ORDER = [1, 2, 3, 4, 5];
+const POS_SORT = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4 };
 const POS_COLORS = {
   1: 'bg-blue-700', 2: 'bg-green-700', 3: 'bg-green-700',
-  4: 'bg-yellow-600', 5: 'bg-red-600', 6: 'bg-gray-600',
+  4: 'bg-yellow-600', 5: 'bg-red-600',
 };
 
 const STATUS_INFO = {
@@ -231,6 +231,17 @@ export default function Admin({ onBack }) {
     return sortByPos(list);
   }, [players, eligibleIds, tPos, tClub]);
 
+  // Club counts for the pool draft sidebar (respects tPos + tClub filters)
+  const clubCounts = useMemo(() => {
+    const map = {};
+    for (const p of poolDraft) {
+      const id = p.club_id;
+      if (!map[id]) map[id] = { abbr: p.club?.abbreviation || `${id}`, count: 0 };
+      map[id].count++;
+    }
+    return Object.values(map).sort((a, b) => b.count - a.count);
+  }, [poolDraft]);
+
   // Table 2: não cotados que ainda NÃO foram adicionados ao pool
   const outros = useMemo(() => {
     const list = players
@@ -242,7 +253,7 @@ export default function Admin({ onBack }) {
   }, [players, eligibleIds, oPos, oStatus, oClub]);
 
   return (
-    <div className="min-h-screen p-4 max-w-4xl mx-auto">
+    <div className="min-h-screen p-4 max-w-6xl mx-auto">
 
       {/* Header */}
       <div className="flex items-center gap-3 mb-6 pt-4">
@@ -318,71 +329,106 @@ export default function Admin({ onBack }) {
         <div className="space-y-6">
 
           {/* ── Tabela 1: Pool do Draft ── */}
-          <div className="card">
-            <h3 className="font-semibold text-green-400 mb-1 flex items-center gap-2">
-              ✅ Pool do Draft
-              <span className="text-xs text-gray-500 font-normal">({poolDraft.length})</span>
-              {eligibleIds.size > 0 && (
-                <span className="text-xs text-blue-400 font-normal">
-                  · {eligibleIds.size} adicionados manualmente
-                </span>
-              )}
-            </h3>
-            <p className="text-xs text-gray-600 mb-3">
-              Prováveis titulares + jogadores adicionados manualmente
-            </p>
+          <div className="flex flex-col lg:flex-row gap-4 items-start">
 
-            {/* Filters */}
-            <div className="space-y-2 mb-3">
-              <PosFilter
-                value={tPos}
-                onChange={setTPos}
-                players={players.filter(p => p.status_id === 7 || eligibleIds.has(p.cartola_id))}
-                countStatus={null}
-              />
-              <div className="flex items-center gap-2">
-                <ClubSelect value={tClub} onChange={setTClub} clubs={clubs} />
-                {(tPos !== 0 || tClub !== 0) && (
-                  <button
-                    onClick={() => { setTPos(0); setTClub(0); }}
-                    className="text-xs text-gray-600 hover:text-gray-300 underline transition-colors"
-                  >
-                    limpar
-                  </button>
+            {/* Main table */}
+            <div className="card flex-1 min-w-0">
+              <h3 className="font-semibold text-green-400 mb-1 flex items-center gap-2">
+                ✅ Pool do Draft
+                <span className="text-xs text-gray-500 font-normal">({poolDraft.length})</span>
+                {eligibleIds.size > 0 && (
+                  <span className="text-xs text-blue-400 font-normal">
+                    · {eligibleIds.size} adicionados manualmente
+                  </span>
                 )}
+              </h3>
+              <p className="text-xs text-gray-600 mb-3">
+                Prováveis titulares + jogadores adicionados manualmente
+              </p>
+
+              {/* Filters */}
+              <div className="space-y-2 mb-3">
+                <PosFilter
+                  value={tPos}
+                  onChange={setTPos}
+                  players={players.filter(p => p.status_id === 7 || eligibleIds.has(p.cartola_id))}
+                  countStatus={null}
+                />
+                <div className="flex items-center gap-2">
+                  <ClubSelect value={tClub} onChange={setTClub} clubs={clubs} />
+                  {(tPos !== 0 || tClub !== 0) && (
+                    <button
+                      onClick={() => { setTPos(0); setTClub(0); }}
+                      className="text-xs text-gray-600 hover:text-gray-300 underline transition-colors"
+                    >
+                      limpar
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {poolDraft.length === 0 ? (
+                <p className="text-gray-600 text-sm text-center py-4">Nenhum com os filtros atuais</p>
+              ) : (
+                <div className="divide-y divide-gray-800/50">
+                  {poolDraft.map(p => {
+                    const isManual = eligibleIds.has(p.cartola_id);
+                    const isToggling = togglingId === p.cartola_id;
+                    return (
+                      <div
+                        key={p.cartola_id}
+                        className={isManual ? 'border-l-2 border-blue-500 rounded-r-lg' : ''}
+                      >
+                        <PlayerRow
+                          player={p}
+                          match={clubMatches[p.club_id] || clubMatches[String(p.club_id)] || null}
+                          action={isManual ? (
+                            <button
+                              onClick={() => handleToggleEligible(p.cartola_id)}
+                              disabled={isToggling}
+                              className="text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 border bg-blue-900/40 text-blue-300 hover:bg-red-900/40 hover:text-red-300 border-blue-700 hover:border-red-700"
+                            >
+                              {isToggling ? '...' : 'Remover'}
+                            </button>
+                          ) : null}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            {poolDraft.length === 0 ? (
-              <p className="text-gray-600 text-sm text-center py-4">Nenhum com os filtros atuais</p>
-            ) : (
-              <div className="divide-y divide-gray-800/50">
-                {poolDraft.map(p => {
-                  const isManual = eligibleIds.has(p.cartola_id);
-                  const isToggling = togglingId === p.cartola_id;
-                  return (
-                    <div
-                      key={p.cartola_id}
-                      className={isManual ? 'border-l-2 border-blue-500 rounded-r-lg' : ''}
-                    >
-                      <PlayerRow
-                        player={p}
-                        match={clubMatches[p.club_id] || clubMatches[String(p.club_id)] || null}
-                        action={isManual ? (
-                          <button
-                            onClick={() => handleToggleEligible(p.cartola_id)}
-                            disabled={isToggling}
-                            className="text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 border bg-blue-900/40 text-blue-300 hover:bg-red-900/40 hover:text-red-300 border-blue-700 hover:border-red-700"
-                          >
-                            {isToggling ? '...' : 'Remover'}
-                          </button>
-                        ) : null}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            {/* Club count sidebar */}
+            <div className="card lg:w-52 w-full flex-shrink-0">
+              <h4 className="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wide">
+                Jogadores por time
+              </h4>
+              {clubCounts.length === 0 ? (
+                <p className="text-gray-600 text-xs text-center py-4">—</p>
+              ) : (
+                <div className="space-y-2">
+                  {clubCounts.map(({ abbr, count }) => {
+                    const pct = Math.round((count / clubCounts[0].count) * 100);
+                    return (
+                      <div key={abbr}>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-xs font-medium text-gray-300">{abbr}</span>
+                          <span className="text-xs font-bold text-cartola-gold">{count}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-gray-800 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-cartola-green transition-all"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
           </div>
 
           {/* ── Tabela 2: Não cotados ── */}

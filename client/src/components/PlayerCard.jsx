@@ -1,13 +1,12 @@
 import React from 'react';
 
-const POSITION_LABELS = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA', 6: 'TEC' };
+const POSITION_LABELS = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA' };
 const POSITION_COLORS = {
   1: 'bg-blue-600',
   2: 'bg-green-700',
   3: 'bg-green-700',
   4: 'bg-yellow-600',
   5: 'bg-red-600',
-  6: 'bg-gray-600'
 };
 const POSITION_GLOW = {
   1: 'hover:shadow-blue-600/40',
@@ -15,7 +14,6 @@ const POSITION_GLOW = {
   3: 'hover:shadow-green-700/40',
   4: 'hover:shadow-yellow-600/40',
   5: 'hover:shadow-red-600/40',
-  6: 'hover:shadow-gray-500/40'
 };
 
 // Full descriptions shown in tooltip on hover

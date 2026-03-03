@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import PlayerCard from './PlayerCard.jsx';
 
-const POSITION_LABELS = { 0: 'Todos', 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA', 6: 'TEC' };
+const POSITION_LABELS = { 0: 'Todos', 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA' };
 
 export default function PlayerList({ players, pickedIds, isMyTurn, onPick }) {
   const [search, setSearch] = useState('');

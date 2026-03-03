@@ -1,11 +1,11 @@
 import React from 'react';
 
 const FORMATION_COUNTS = {
-  '4-3-3': { 1: 1, 2: 2, 3: 2, 4: 3, 5: 3, 6: 1 },
-  '4-4-2': { 1: 1, 2: 2, 3: 2, 4: 4, 5: 2, 6: 1 },
-  '3-5-2': { 1: 1, 2: 0, 3: 3, 4: 5, 5: 2, 6: 1 },
-  '4-5-1': { 1: 1, 2: 2, 3: 2, 4: 5, 5: 1, 6: 1 },
-  '3-4-3': { 1: 1, 2: 0, 3: 3, 4: 4, 5: 3, 6: 1 }
+  '4-3-3': { 1: 1, 2: 2, 3: 2, 4: 3, 5: 3 },
+  '4-4-2': { 1: 1, 2: 2, 3: 2, 4: 4, 5: 2 },
+  '3-5-2': { 1: 1, 2: 0, 3: 3, 4: 5, 5: 2 },
+  '4-5-1': { 1: 1, 2: 2, 3: 2, 4: 5, 5: 1 },
+  '3-4-3': { 1: 1, 2: 0, 3: 3, 4: 4, 5: 3 }
 };
 
 const POSITION_COLORS = {
@@ -14,10 +14,9 @@ const POSITION_COLORS = {
   3: 'border-green-700 bg-green-900/20',
   4: 'border-yellow-600 bg-yellow-900/20',
   5: 'border-red-600 bg-red-900/20',
-  6: 'border-gray-600 bg-gray-800'
 };
 
-const POS_LABEL = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA', 6: 'TEC' };
+const POS_LABEL = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA' };
 
 export default function TeamSlots({ formation, picks }) {
   if (!formation) return <div className="card text-gray-500 text-sm text-center py-8">Sem formação</div>;

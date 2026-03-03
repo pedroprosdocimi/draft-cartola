@@ -2,7 +2,7 @@ import React from 'react';
 import PlayerCard from './PlayerCard.jsx';
 import Timer from './Timer.jsx';
 
-const POSITION_LABELS = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA', 6: 'TEC' };
+const POSITION_LABELS = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA' };
 
 const POSITION_COLORS = {
   1: { border: 'border-blue-500',   bg: 'bg-blue-900/50',   text: 'text-blue-300',   btn: 'border-blue-500 bg-blue-900/60 hover:bg-blue-800/80' },
@@ -10,15 +10,14 @@ const POSITION_COLORS = {
   3: { border: 'border-green-600',  bg: 'bg-green-900/50',  text: 'text-green-300',  btn: 'border-green-600 bg-green-900/60 hover:bg-green-800/80' },
   4: { border: 'border-yellow-500', bg: 'bg-yellow-900/50', text: 'text-yellow-300', btn: 'border-yellow-500 bg-yellow-900/60 hover:bg-yellow-800/80' },
   5: { border: 'border-red-500',    bg: 'bg-red-900/50',    text: 'text-red-300',    btn: 'border-red-500 bg-red-900/60 hover:bg-red-800/80' },
-  6: { border: 'border-gray-600',   bg: 'bg-gray-700/50',   text: 'text-gray-400',   btn: 'border-gray-600 bg-gray-700/60 hover:bg-gray-600/80' },
 };
 
 const FORMATION_COUNTS = {
-  '4-3-3': { 1: 1, 2: 2, 3: 2, 4: 3, 5: 3, 6: 1 },
-  '4-4-2': { 1: 1, 2: 2, 3: 2, 4: 4, 5: 2, 6: 1 },
-  '3-5-2': { 1: 1, 2: 0, 3: 3, 4: 5, 5: 2, 6: 1 },
-  '4-5-1': { 1: 1, 2: 2, 3: 2, 4: 5, 5: 1, 6: 1 },
-  '3-4-3': { 1: 1, 2: 0, 3: 3, 4: 4, 5: 3, 6: 1 }
+  '4-3-3': { 1: 1, 2: 2, 3: 2, 4: 3, 5: 3 },
+  '4-4-2': { 1: 1, 2: 2, 3: 2, 4: 4, 5: 2 },
+  '3-5-2': { 1: 1, 2: 0, 3: 3, 4: 5, 5: 2 },
+  '4-5-1': { 1: 1, 2: 2, 3: 2, 4: 5, 5: 1 },
+  '3-4-3': { 1: 1, 2: 0, 3: 3, 4: 4, 5: 3 }
 };
 
 // Rows displayed top→bottom: attack → midfield → defense → goalkeeper (TEC excluded from picker)

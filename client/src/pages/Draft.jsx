@@ -6,14 +6,14 @@ import DraftOrder from '../components/DraftOrder.jsx';
 import Timer from '../components/Timer.jsx';
 
 const FORMATIONS_CLIENT = {
-  '4-3-3': { 1: 1, 2: 2, 3: 2, 4: 3, 5: 3, 6: 1 },
-  '4-4-2': { 1: 1, 2: 2, 3: 2, 4: 4, 5: 2, 6: 1 },
-  '3-5-2': { 1: 1, 2: 0, 3: 3, 4: 5, 5: 2, 6: 1 },
-  '4-5-1': { 1: 1, 2: 2, 3: 2, 4: 5, 5: 1, 6: 1 },
-  '3-4-3': { 1: 1, 2: 0, 3: 3, 4: 4, 5: 3, 6: 1 }
+  '4-3-3': { 1: 1, 2: 2, 3: 2, 4: 3, 5: 3 },
+  '4-4-2': { 1: 1, 2: 2, 3: 2, 4: 4, 5: 2 },
+  '3-5-2': { 1: 1, 2: 0, 3: 3, 4: 5, 5: 2 },
+  '4-5-1': { 1: 1, 2: 2, 3: 2, 4: 5, 5: 1 },
+  '3-4-3': { 1: 1, 2: 0, 3: 3, 4: 4, 5: 3 }
 };
 
-const POSITION_LABELS = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA', 6: 'TEC' };
+const POSITION_LABELS = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA' };
 
 export default function Draft({ roomCode, participantId, initialData }) {
   const [mobileTab, setMobileTab] = useState('status'); // 'order' | 'status' | 'team'
