@@ -50,8 +50,8 @@ router.get('/sync/status', (req, res) => {
 
 router.get('/players', (req, res) => {
   try {
-    const { players, clubs } = getPlayersAndClubs();
-    res.json({ players, clubs });
+    const { players, clubs, clubMatches } = getPlayersAndClubs();
+    res.json({ players, clubs, clubMatches });
   } catch (err) {
     res.status(503).json({ error: err.message });
   }

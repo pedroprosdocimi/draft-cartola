@@ -6,6 +6,7 @@ import Home from './pages/Home.jsx';
 import Lobby from './pages/Lobby.jsx';
 import Draft from './pages/Draft.jsx';
 import EndScreen from './pages/EndScreen.jsx';
+import Admin from './pages/Admin.jsx';
 import socket from './socket.js';
 
 export default function App() {
@@ -135,7 +136,9 @@ export default function App() {
         </div>
       )}
 
-      {page === 'home' && <Home user={user} onLogout={handleLogout} />}
+      {page === 'home' && <Home user={user} onLogout={handleLogout} onGoAdmin={() => setPage('admin')} />}
+
+      {page === 'admin' && <Admin onBack={() => setPage('home')} />
 
       {page === 'lobby' && (
         <Lobby roomCode={roomCode} participantId={participantId} isAdmin={isAdmin} />

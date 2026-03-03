@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import socket from '../socket.js';
 
-export default function Home({ user, onLogout }) {
+export default function Home({ user, onLogout, onGoAdmin }) {
   const [roomCode, setRoomCode] = useState('');
   const [tab, setTab] = useState('create'); // 'create' | 'join' — only admin sees tabs
 
@@ -113,7 +113,18 @@ export default function Home({ user, onLogout }) {
           )}
         </div>
 
-        <p className="text-center text-gray-600 text-xs mt-6">
+        {user.isAdmin && (
+          <div className="mt-4 text-center">
+            <button
+              onClick={onGoAdmin}
+              className="text-xs text-gray-600 hover:text-cartola-gold transition-colors border border-gray-800 hover:border-gray-600 px-4 py-2 rounded-lg"
+            >
+              ⚙️ Painel Admin
+            </button>
+          </div>
+        )}
+
+        <p className="text-center text-gray-600 text-xs mt-4">
           Dados dos jogadores via API não-oficial do Cartola FC
         </p>
       </div>
