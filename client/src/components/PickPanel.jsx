@@ -169,6 +169,7 @@ export default function PickPanel({
   if (isMyTurn && myFormation) {
     return (
       <div className="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center gap-4 sm:gap-6 p-4 overflow-y-auto">
+        <Timer timeLeft={timeLeft} isMyTurn={isMyTurn} />
         <p className="text-cartola-gold font-bold text-xl sm:text-2xl tracking-wide">Escolha uma posição</p>
         <FormationPicker
           myFormation={myFormation}

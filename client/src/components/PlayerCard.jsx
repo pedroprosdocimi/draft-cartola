@@ -137,10 +137,10 @@ function ScoutBadge({ scoutKey, val, positive, posAvg }) {
 
 function ScoutBadges({ scouts, positionId, scoutPositionAvgs }) {
   const config = SCOUT_CONFIG[positionId];
-  if (!scouts || !config) return null;
+  if (!config) return null;
 
   const badges = config
-    .map(([key, positive]) => ({ key, positive, val: scouts.stats?.[key] ?? 0 }));
+    .map(([key, positive]) => ({ key, positive, val: scouts?.stats?.[key] ?? 0 }));
 
   return (
     <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 text-xs pt-0.5">
