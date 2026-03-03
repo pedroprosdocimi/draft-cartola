@@ -138,7 +138,7 @@ export default function App() {
 
       {page === 'home' && <Home user={user} onLogout={handleLogout} onGoAdmin={() => setPage('admin')} />}
 
-      {page === 'admin' && <Admin onBack={() => setPage('home')} />
+      {page === 'admin' && <Admin onBack={() => setPage('home')} />}
 
       {page === 'lobby' && (
         <Lobby roomCode={roomCode} participantId={participantId} isAdmin={isAdmin} />
