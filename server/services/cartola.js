@@ -99,9 +99,12 @@ async function syncFromAPI() {
   const saveClub = db.prepare(
     'INSERT OR REPLACE INTO clubs (id, name, abbreviation, shield_url) VALUES (?, ?, ?, ?)'
   );
+  const clubSample = Object.entries(rawClubs).slice(0, 2);
+  console.log('[sync clubs sample]', clubSample.map(([id, c]) => ({ id, nome: c.nome, abreviacao: c.abreviacao, keys: Object.keys(c) })));
   for (const [id, club] of Object.entries(rawClubs)) {
+    const fullName = club.nome_completo || club.nome || club.abreviacao;
     saveClub.run(
-      parseInt(id), club.nome, club.abreviacao,
+      parseInt(id), fullName, club.abreviacao,
       club.escudo_url || club.escudos?.['45x45'] || ''
     );
   }

@@ -232,22 +232,16 @@ export default function Admin({ onBack }) {
   }, [players, eligibleIds, tPos, tClub]);
 
   // Club counts for the pool draft sidebar (respects tPos + tClub filters)
-  // Shows ALL clubs that exist in the base pool, even those with 0 after filtering
+  // Shows ALL clubs (even those with 0 after filtering)
   const clubCounts = useMemo(() => {
     const countMap = {};
     for (const p of poolDraft) {
       countMap[p.club_id] = (countMap[p.club_id] || 0) + 1;
     }
-    const baseClubIds = new Set(
-      players
-        .filter(p => p.status_id === 7 || eligibleIds.has(p.cartola_id))
-        .map(p => p.club_id)
-    );
     return clubs
-      .filter(c => baseClubIds.has(c.id))
       .map(c => ({ name: c.name || c.abbreviation, count: countMap[c.id] || 0 }))
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-  }, [poolDraft, players, eligibleIds, clubs]);
+  }, [poolDraft, clubs]);
 
   // Table 2: não cotados que ainda NÃO foram adicionados ao pool
   const outros = useMemo(() => {
