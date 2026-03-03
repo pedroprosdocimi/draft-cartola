@@ -16,6 +16,7 @@ const FORMATIONS_CLIENT = {
 const POSITION_LABELS = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA', 6: 'TEC' };
 
 export default function Draft({ roomCode, participantId, initialData }) {
+  const [mobileTab, setMobileTab] = useState('status'); // 'order' | 'status' | 'team'
   const clubs = useRef(initialData.clubs || {}).current;        // stable, never changes
   const clubMatches = useRef(initialData.clubMatches || {}).current; // stable, never changes
 
@@ -182,6 +183,11 @@ export default function Draft({ roomCode, participantId, initialData }) {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-switch to status tab on mobile when it's the user's turn
+  useEffect(() => {
+    if (isMyTurn) setMobileTab('status');
+  }, [isMyTurn]);
+
   const handlePickPosition = useCallback((positionId) => {
     socket.emit('pick_position', { roomCode, participantId, positionId });
   }, [roomCode, participantId]);
@@ -220,15 +226,15 @@ export default function Draft({ roomCode, participantId, initialData }) {
       )}
 
       {/* Top bar */}
-      <div className="bg-gray-900 border-b border-gray-800 px-4 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="bg-gray-900 border-b border-gray-800 px-4 py-2 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-2">
           <span className="font-bold text-white">⚽ Draft</span>
           <span className="text-xs text-gray-500 font-mono">{roomCode}</span>
         </div>
         <div className="text-sm font-semibold">
           {isMyTurn
             ? <span className="text-cartola-gold animate-pulse">▶ SUA VEZ</span>
-            : <span className="text-gray-400">Vez de {currentPickerName}</span>}
+            : <span className="text-gray-400 text-xs sm:text-sm truncate max-w-[120px] sm:max-w-none">Vez de {currentPickerName}</span>}
         </div>
         <div className="text-xs text-gray-500">Pick #{pickNumber + 1}</div>
       </div>
@@ -250,10 +256,10 @@ export default function Draft({ roomCode, participantId, initialData }) {
         timeLeft={timeLeft}
       />
 
-      {/* Main 3-column layout */}
+      {/* Main layout — 3 columns on desktop, tabs on mobile */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left: draft info */}
-        <div className="w-72 flex-shrink-0 border-r border-gray-800 p-4 overflow-y-auto space-y-4">
+        <div className={`${mobileTab === 'order' ? 'flex flex-col flex-1' : 'hidden'} md:flex md:flex-none md:flex-col md:w-72 flex-shrink-0 border-r border-gray-800 p-4 overflow-y-auto space-y-4`}>
           <DraftOrder
             draftOrder={remainingOrder}
             participants={participants}
@@ -295,9 +301,9 @@ export default function Draft({ roomCode, participantId, initialData }) {
         </div>
 
         {/* Center: timer + status */}
-        <div className="flex-1 flex flex-col items-center justify-center gap-8 p-8">
+        <div className={`${mobileTab === 'status' ? 'flex flex-col flex-1' : 'hidden'} md:flex md:flex-1 flex-col items-center justify-center gap-6 sm:gap-8 p-4 sm:p-8`}>
           <Timer timeLeft={timeLeft} isMyTurn={isMyTurn} />
-          <div className={`w-full max-w-sm text-center py-6 rounded-2xl text-xl font-semibold ${
+          <div className={`w-full max-w-sm text-center py-5 sm:py-6 rounded-2xl text-lg sm:text-xl font-semibold ${
             isMyTurn ? 'bg-cartola-green/10 border border-cartola-green text-cartola-gold' : 'bg-gray-900 border border-gray-800 text-gray-300'
           }`}>
             {turnText}
@@ -305,7 +311,7 @@ export default function Draft({ roomCode, participantId, initialData }) {
         </div>
 
         {/* Right: My Team */}
-        <div className="w-72 flex-shrink-0 border-l border-gray-800 p-4 overflow-y-auto">
+        <div className={`${mobileTab === 'team' ? 'flex flex-col flex-1' : 'hidden'} md:flex md:flex-none md:flex-col md:w-72 flex-shrink-0 border-l border-gray-800 p-4 overflow-y-auto`}>
           <TeamSlots
             formation={me?.formation}
             picks={myPicks.map(p => ({
@@ -314,6 +320,31 @@ export default function Draft({ roomCode, participantId, initialData }) {
             }))}
           />
         </div>
+      </div>
+
+      {/* Bottom tab bar — mobile only */}
+      <div className="md:hidden flex border-t border-gray-800 bg-gray-900 flex-shrink-0">
+        {[
+          { id: 'order', label: 'Ordem', icon: '📋' },
+          { id: 'status', label: 'Status', icon: '⏱' },
+          { id: 'team', label: 'Meu Time', icon: '⚽' },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setMobileTab(tab.id)}
+            className={`flex-1 py-2.5 text-xs font-medium transition-colors relative ${
+              mobileTab === tab.id ? 'text-cartola-green' : 'text-gray-500'
+            }`}
+          >
+            <div className="flex flex-col items-center gap-0.5">
+              <span>{tab.icon}</span>
+              <span>{tab.label}</span>
+            </div>
+            {tab.id === 'status' && isMyTurn && mobileTab !== 'status' && (
+              <span className="absolute top-1.5 right-1/4 w-2 h-2 bg-cartola-gold rounded-full animate-pulse" />
+            )}
+          </button>
+        ))}
       </div>
     </div>
   );

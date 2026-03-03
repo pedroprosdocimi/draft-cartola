@@ -196,30 +196,30 @@ export default function PlayerCard({ player, onClick, isMyTurn, compact = false,
       <button
         onClick={isMyTurn ? onClick : undefined}
         disabled={!isMyTurn}
-        className={`w-36 flex flex-col bg-gray-800 border rounded-xl overflow-visible transition-all text-left
+        className={`w-28 sm:w-36 flex flex-col bg-gray-800 border rounded-xl overflow-visible transition-all text-left
           ${isMyTurn
             ? `border-gray-600 hover:border-cartola-green hover:scale-105 hover:shadow-lg ${POSITION_GLOW[player.position_id]} cursor-pointer active:scale-100`
             : 'border-gray-700 opacity-80 cursor-default'
           }`}
       >
         {/* Photo area */}
-        <div className="relative bg-gray-900 h-36 overflow-hidden rounded-t-xl flex items-center justify-center">
+        <div className="relative bg-gray-900 h-28 sm:h-36 overflow-hidden rounded-t-xl flex items-center justify-center">
           <div className={`absolute top-0 left-0 right-0 h-1.5 ${posBg}`} />
           {player.photo
             ? <img src={player.photo} alt={player.nickname} className="w-full h-full object-cover object-top" />
-            : <span className="text-5xl text-gray-700">?</span>}
+            : <span className="text-4xl sm:text-5xl text-gray-700">?</span>}
         </div>
 
         {/* Info area */}
-        <div className="flex-1 p-2 flex flex-col items-center text-center gap-1">
-          <div className="font-bold text-white text-sm leading-tight w-full truncate">{player.nickname}</div>
+        <div className="flex-1 p-1.5 sm:p-2 flex flex-col items-center text-center gap-0.5 sm:gap-1">
+          <div className="font-bold text-white text-xs sm:text-sm leading-tight w-full truncate">{player.nickname}</div>
 
-          <div className="flex items-center gap-1.5">
-            <span className={`${posBg} text-white text-xs font-bold px-2 py-0.5 rounded`}>{posLabel}</span>
+          <div className="flex items-center gap-1 sm:gap-1.5">
+            <span className={`${posBg} text-white text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded`}>{posLabel}</span>
             <AvgScore score={player.average_score} posAvg={posAvg} />
           </div>
 
-          <div className="w-full border-t border-gray-700 my-1" />
+          <div className="w-full border-t border-gray-700 my-0.5 sm:my-1" />
 
           <div className="text-xs text-gray-400 font-medium">{player.club?.abbreviation || ''}</div>
           {match && <div className="text-xs text-blue-400 font-medium">{match}</div>}

@@ -29,9 +29,9 @@ function AvailableSlot({ posId, onPickPosition }) {
   return (
     <button
       onClick={() => onPickPosition(posId)}
-      className={`w-32 h-40 flex flex-col items-center justify-center rounded-2xl border-2 ${c.btn} transition-all hover:scale-105 active:scale-95`}
+      className={`w-20 h-28 sm:w-32 sm:h-40 flex flex-col items-center justify-center rounded-2xl border-2 ${c.btn} transition-all hover:scale-105 active:scale-95`}
     >
-      <span className={`text-xl font-bold ${c.text}`}>{POSITION_LABELS[posId]}</span>
+      <span className={`text-base sm:text-xl font-bold ${c.text}`}>{POSITION_LABELS[posId]}</span>
     </button>
   );
 }
@@ -39,15 +39,15 @@ function AvailableSlot({ posId, onPickPosition }) {
 function FilledSlot({ player, posId }) {
   const c = POSITION_COLORS[posId] || POSITION_COLORS[6];
   return (
-    <div className={`w-32 h-40 flex flex-col rounded-2xl border ${c.border} bg-gray-800/80 overflow-hidden opacity-60`}>
-      <div className="h-24 w-full overflow-hidden flex-shrink-0">
+    <div className={`w-20 h-28 sm:w-32 sm:h-40 flex flex-col rounded-2xl border ${c.border} bg-gray-800/80 overflow-hidden opacity-60`}>
+      <div className="h-16 sm:h-24 w-full overflow-hidden flex-shrink-0">
         {player.photo
           ? <img src={player.photo} className="w-full h-full object-cover object-top" alt="" />
           : <div className={`w-full h-full ${c.bg}`} />}
       </div>
-      <div className={`flex-1 ${c.bg} flex flex-col items-center justify-center px-2`}>
+      <div className={`flex-1 ${c.bg} flex flex-col items-center justify-center px-1 sm:px-2`}>
         <span className={`text-xs font-bold ${c.text} leading-none`}>{POSITION_LABELS[posId]}</span>
-        <span className="text-[11px] text-gray-200 leading-none w-full text-center truncate mt-1">{player.nickname}</span>
+        <span className="text-[10px] sm:text-[11px] text-gray-200 leading-none w-full text-center truncate mt-1">{player.nickname}</span>
       </div>
     </div>
   );
@@ -103,7 +103,7 @@ function FormationPicker({ myFormation, myPicks, neededPositions, onPickPosition
   };
 
   return (
-    <div className="bg-green-950/40 border border-green-900/30 rounded-2xl p-5 flex flex-col gap-3">
+    <div className="bg-green-950/40 border border-green-900/30 rounded-2xl p-3 sm:p-5 flex flex-col gap-2 sm:gap-3">
       {FIELD_ROWS.map(posIds => {
         const row = renderRow(posIds);
         if (!row) return null;
@@ -134,7 +134,7 @@ export default function PickPanel({
   // ── Modal: 5 player cards (shown to everyone) ────────────────────────────
   if (offeredPlayers) {
     return (
-      <div className="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center p-4 gap-5">
+      <div className="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center p-3 sm:p-4 gap-3 sm:gap-5 overflow-y-auto">
         <Timer timeLeft={timeLeft} isMyTurn={isMyTurn} />
         <div className="text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
@@ -148,7 +148,7 @@ export default function PickPanel({
               : <><strong className="text-white">{currentPickerName}</strong> está escolhendo...</>}
           </p>
         </div>
-        <div className="flex gap-3 flex-wrap justify-center">
+        <div className="flex gap-2 sm:gap-3 flex-wrap justify-center">
           {offeredPlayers.map(player => (
             <PlayerCard
               key={player.cartola_id}
@@ -169,8 +169,8 @@ export default function PickPanel({
   // ── Modal: formation picker (only when it's my turn) ─────────────────────
   if (isMyTurn && myFormation) {
     return (
-      <div className="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center gap-6">
-        <p className="text-cartola-gold font-bold text-2xl tracking-wide">Escolha uma posição</p>
+      <div className="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center gap-4 sm:gap-6 p-4 overflow-y-auto">
+        <p className="text-cartola-gold font-bold text-xl sm:text-2xl tracking-wide">Escolha uma posição</p>
         <FormationPicker
           myFormation={myFormation}
           myPicks={myPicks}
