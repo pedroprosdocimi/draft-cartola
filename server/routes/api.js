@@ -57,6 +57,29 @@ router.get('/players', (req, res) => {
   }
 });
 
+// GET /api/admin/eligible — list manually added player IDs
+router.get('/admin/eligible', (req, res) => {
+  const rows = db.prepare('SELECT cartola_id FROM draft_eligible_override').all();
+  res.json({ eligible: rows.map(r => r.cartola_id) });
+});
+
+// POST /api/admin/eligible/:cartolaId — add player to draft pool
+router.post('/admin/eligible/:cartolaId', (req, res) => {
+  const cartolaId = parseInt(req.params.cartolaId);
+  if (isNaN(cartolaId)) return res.status(400).json({ error: 'cartolaId inválido.' });
+  db.prepare('INSERT OR IGNORE INTO draft_eligible_override (cartola_id, added_at) VALUES (?, ?)')
+    .run(cartolaId, new Date().toISOString());
+  res.json({ ok: true });
+});
+
+// DELETE /api/admin/eligible/:cartolaId — remove player from draft pool
+router.delete('/admin/eligible/:cartolaId', (req, res) => {
+  const cartolaId = parseInt(req.params.cartolaId);
+  if (isNaN(cartolaId)) return res.status(400).json({ error: 'cartolaId inválido.' });
+  db.prepare('DELETE FROM draft_eligible_override WHERE cartola_id = ?').run(cartolaId);
+  res.json({ ok: true });
+});
+
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });

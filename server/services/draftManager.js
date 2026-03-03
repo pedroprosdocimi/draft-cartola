@@ -146,7 +146,10 @@ function startDraft(roomCode, players, clubs, clubMatches) {
     if (!p.formation) return { error: `${p.name} ainda não escolheu formação.` };
   }
 
-  const probablePlayers = players.filter(p => p.status_id === 7);
+  const overrideIds = new Set(
+    db.prepare('SELECT cartola_id FROM draft_eligible_override').all().map(r => r.cartola_id)
+  );
+  const probablePlayers = players.filter(p => p.status_id === 7 || overrideIds.has(p.cartola_id));
   room.players = probablePlayers.length > 0 ? probablePlayers : players;
   console.log(`[draft] ${room.players.length} jogadores prováveis (de ${players.length} total)`);
   room.clubs = clubs;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { API_URL } from '../config.js';
 
 const POS_LABELS = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA', 6: 'TEC' };
@@ -13,11 +13,14 @@ const POS_COLORS = {
 };
 
 const STATUS_INFO = {
+  7: { label: 'Provável',   bg: 'bg-green-900/40',  text: 'text-green-300'  },
   2: { label: 'Dúvida',     bg: 'bg-yellow-900/40', text: 'text-yellow-300' },
   3: { label: 'Suspenso',   bg: 'bg-red-900/40',    text: 'text-red-300'    },
   5: { label: 'Contundido', bg: 'bg-orange-900/40', text: 'text-orange-300' },
   6: { label: 'Nulo',       bg: 'bg-gray-800',      text: 'text-gray-500'   },
 };
+
+const STATUS_FILTER_ORDER = [7, 2, 5, 3, 6];
 
 function StatusBadge({ statusId }) {
   const info = STATUS_INFO[statusId];
@@ -29,7 +32,7 @@ function StatusBadge({ statusId }) {
   );
 }
 
-function PlayerRow({ player, match }) {
+function PlayerRow({ player, match, action }) {
   const posColor = POS_COLORS[player.position_id] || 'bg-gray-600';
   return (
     <div className="flex items-center gap-2 sm:gap-3 px-3 py-2 hover:bg-gray-800/50 rounded-lg">
@@ -57,6 +60,8 @@ function PlayerRow({ player, match }) {
         <div className="text-sm font-semibold text-cartola-gold">{(player.average_score || 0).toFixed(1)}</div>
         <div className="text-xs text-gray-600">C${(player.price || 0).toFixed(1)}</div>
       </div>
+
+      {action && <div className="flex-shrink-0">{action}</div>}
     </div>
   );
 }
@@ -65,9 +70,13 @@ export default function Admin({ onBack }) {
   const [players, setPlayers] = useState([]);
   const [clubMatches, setClubMatches] = useState({});
   const [syncStatus, setSyncStatus] = useState(null);
-  const [activePos, setActivePos] = useState(0); // 0 = todos
+  const [eligibleIds, setEligibleIds] = useState(new Set());
+  const [activePos, setActivePos] = useState(0);
+  const [activeStatus, setActiveStatus] = useState(0);
+  const [activeClub, setActiveClub] = useState(0);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [togglingId, setTogglingId] = useState(null); // cartola_id being toggled
   const [error, setError] = useState(null);
   const [syncResult, setSyncResult] = useState(null);
 
@@ -78,16 +87,19 @@ export default function Admin({ onBack }) {
     setLoading(true);
     setError(null);
     try {
-      const [playersRes, statusRes] = await Promise.all([
+      const [playersRes, statusRes, eligibleRes] = await Promise.all([
         fetch(`${API_URL}/api/players`, { headers }),
         fetch(`${API_URL}/api/sync/status`, { headers }),
+        fetch(`${API_URL}/api/admin/eligible`, { headers }),
       ]);
       const playersData = await playersRes.json();
       const statusData = await statusRes.json();
+      const eligibleData = await eligibleRes.json();
 
       if (playersData.players) setPlayers(playersData.players);
       if (playersData.clubMatches) setClubMatches(playersData.clubMatches);
       if (statusData.ok !== false) setSyncStatus(statusData);
+      if (eligibleData.eligible) setEligibleIds(new Set(eligibleData.eligible));
     } catch {
       setError('Erro ao carregar dados.');
     } finally {
@@ -117,17 +129,56 @@ export default function Admin({ onBack }) {
     }
   };
 
-  const filtered = activePos === 0
-    ? players
-    : players.filter(p => p.position_id === activePos);
+  const handleToggleEligible = async (cartolaId) => {
+    setTogglingId(cartolaId);
+    const isEligible = eligibleIds.has(cartolaId);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/eligible/${cartolaId}`, {
+        method: isEligible ? 'DELETE' : 'POST',
+        headers,
+      });
+      if (res.ok) {
+        setEligibleIds(prev => {
+          const next = new Set(prev);
+          isEligible ? next.delete(cartolaId) : next.add(cartolaId);
+          return next;
+        });
+      }
+    } catch {
+      setError('Erro ao atualizar jogador.');
+    } finally {
+      setTogglingId(null);
+    }
+  };
 
-  const titulares = filtered
-    .filter(p => p.status_id === 7)
-    .sort((a, b) => (b.average_score || 0) - (a.average_score || 0));
+  const clubs = useMemo(() => {
+    const seen = new Set();
+    return players
+      .map(p => p.club)
+      .filter(c => c && !seen.has(c.id) && seen.add(c.id))
+      .sort((a, b) => (a.abbreviation || '').localeCompare(b.abbreviation || ''));
+  }, [players]);
 
-  const outros = filtered
-    .filter(p => p.status_id !== 7)
-    .sort((a, b) => (b.average_score || 0) - (a.average_score || 0));
+  const filtered = useMemo(() => players
+    .filter(p => activePos === 0    || p.position_id === activePos)
+    .filter(p => activeStatus === 0 || p.status_id === activeStatus)
+    .filter(p => activeClub === 0   || p.club_id === activeClub),
+  [players, activePos, activeStatus, activeClub]);
+
+  const titulares = useMemo(() =>
+    filtered.filter(p => p.status_id === 7)
+      .sort((a, b) => (b.average_score || 0) - (a.average_score || 0)),
+  [filtered]);
+
+  // Não cotados: eligible ones float to the top
+  const outros = useMemo(() => {
+    const list = filtered.filter(p => p.status_id !== 7);
+    const eligible = list.filter(p => eligibleIds.has(p.cartola_id))
+      .sort((a, b) => (b.average_score || 0) - (a.average_score || 0));
+    const rest = list.filter(p => !eligibleIds.has(p.cartola_id))
+      .sort((a, b) => (b.average_score || 0) - (a.average_score || 0));
+    return [...eligible, ...rest];
+  }, [filtered, eligibleIds]);
 
   return (
     <div className="min-h-screen p-4 max-w-4xl mx-auto">
@@ -164,6 +215,9 @@ export default function Admin({ onBack }) {
                   </span> não cotados
                 </span>
                 <span className="text-gray-400">
+                  <span className="text-blue-400 font-bold">{eligibleIds.size}</span> adicionados manualmente
+                </span>
+                <span className="text-gray-400">
                   <span className="text-white font-bold">{syncStatus.matchCount}</span> jogos na rodada
                 </span>
               </div>
@@ -194,27 +248,85 @@ export default function Admin({ onBack }) {
         </div>
       </div>
 
-      {/* Position filter */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 mb-4">
-        {[{ id: 0, label: 'Todos' }, ...POS_ORDER.map(id => ({ id, label: POS_LABELS[id] }))].map(pos => (
-          <button
-            key={pos.id}
-            onClick={() => setActivePos(pos.id)}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              activePos === pos.id
-                ? 'bg-cartola-green text-white'
-                : 'bg-gray-800 text-gray-400 hover:text-white'
-            }`}
-          >
-            {pos.label}
-            {pos.id !== 0 && (
-              <span className="ml-1 text-xs opacity-60">
-                ({players.filter(p => p.position_id === pos.id && p.status_id === 7).length})
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      {/* Filters */}
+      {players.length > 0 && (
+        <div className="space-y-2 mb-4">
+          {/* Posição */}
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+            {[{ id: 0, label: 'Todas pos.' }, ...POS_ORDER.map(id => ({ id, label: POS_LABELS[id] }))].map(pos => (
+              <button
+                key={pos.id}
+                onClick={() => setActivePos(pos.id)}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  activePos === pos.id
+                    ? 'bg-cartola-green text-white'
+                    : 'bg-gray-800 text-gray-400 hover:text-white'
+                }`}
+              >
+                {pos.label}
+                {pos.id !== 0 && (
+                  <span className="ml-1 opacity-50">
+                    ({players.filter(p => p.position_id === pos.id && p.status_id === 7).length})
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Status + Time */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <div className="flex gap-1.5 flex-wrap">
+              <button
+                onClick={() => setActiveStatus(0)}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  activeStatus === 0 ? 'bg-gray-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+                }`}
+              >
+                Todos status
+              </button>
+              {STATUS_FILTER_ORDER.map(sid => {
+                const info = STATUS_INFO[sid];
+                return (
+                  <button
+                    key={sid}
+                    onClick={() => setActiveStatus(activeStatus === sid ? 0 : sid)}
+                    className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                      activeStatus === sid
+                        ? `${info.bg} ${info.text} border-current`
+                        : 'bg-gray-800 text-gray-400 border-transparent hover:text-white'
+                    }`}
+                  >
+                    {info.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <select
+              value={activeClub}
+              onChange={e => setActiveClub(Number(e.target.value))}
+              className="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-cartola-green cursor-pointer"
+            >
+              <option value={0}>Todos os times</option>
+              {clubs.map(c => (
+                <option key={c.id} value={c.id}>{c.abbreviation} — {c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {(activePos !== 0 || activeStatus !== 0 || activeClub !== 0) && (
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <span>Mostrando {filtered.length} jogadores</span>
+              <button
+                onClick={() => { setActivePos(0); setActiveStatus(0); setActiveClub(0); }}
+                className="text-gray-600 hover:text-gray-300 underline transition-colors"
+              >
+                limpar filtros
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Player lists */}
       {loading && players.length === 0 ? (
@@ -228,48 +340,80 @@ export default function Admin({ onBack }) {
         <div className="space-y-4">
 
           {/* Titulares */}
-          <div className="card">
-            <h3 className="font-semibold text-green-400 mb-1 flex items-center gap-2">
-              ✅ Prováveis titulares
-              <span className="text-xs text-gray-500 font-normal">({titulares.length})</span>
-            </h3>
-            <p className="text-xs text-gray-600 mb-3">Estes jogadores aparecerão nos drafts como opções selecionáveis</p>
-            {titulares.length === 0 ? (
-              <p className="text-gray-600 text-sm text-center py-4">Nenhum nesta posição</p>
-            ) : (
-              <div className="divide-y divide-gray-800/50">
-                {titulares.map(p => (
-                  <PlayerRow
-                    key={p.cartola_id}
-                    player={p}
-                    match={clubMatches[p.club_id] || clubMatches[String(p.club_id)] || null}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          {activeStatus !== 2 && activeStatus !== 3 && activeStatus !== 5 && activeStatus !== 6 && (
+            <div className="card">
+              <h3 className="font-semibold text-green-400 mb-1 flex items-center gap-2">
+                ✅ Prováveis titulares
+                <span className="text-xs text-gray-500 font-normal">({titulares.length})</span>
+              </h3>
+              <p className="text-xs text-gray-600 mb-3">Entram automaticamente no pool do draft</p>
+              {titulares.length === 0 ? (
+                <p className="text-gray-600 text-sm text-center py-4">Nenhum com os filtros atuais</p>
+              ) : (
+                <div className="divide-y divide-gray-800/50">
+                  {titulares.map(p => (
+                    <PlayerRow
+                      key={p.cartola_id}
+                      player={p}
+                      match={clubMatches[p.club_id] || clubMatches[String(p.club_id)] || null}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Não cotados */}
-          <div className="card">
-            <h3 className="font-semibold text-gray-400 mb-1 flex items-center gap-2">
-              ⚠️ Não cotados como titulares
-              <span className="text-xs text-gray-500 font-normal">({outros.length})</span>
-            </h3>
-            <p className="text-xs text-gray-600 mb-3">Vieram do sync mas não serão oferecidos nos drafts</p>
-            {outros.length === 0 ? (
-              <p className="text-gray-600 text-sm text-center py-4">Nenhum nesta posição</p>
-            ) : (
-              <div className="divide-y divide-gray-800/50">
-                {outros.map(p => (
-                  <PlayerRow
-                    key={p.cartola_id}
-                    player={p}
-                    match={clubMatches[p.club_id] || clubMatches[String(p.club_id)] || null}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          {activeStatus !== 7 && (
+            <div className="card">
+              <h3 className="font-semibold text-gray-400 mb-1 flex items-center gap-2">
+                ⚠️ Não cotados como titulares
+                <span className="text-xs text-gray-500 font-normal">({outros.length})</span>
+                {eligibleIds.size > 0 && (
+                  <span className="text-xs text-blue-400 font-normal">
+                    · {outros.filter(p => eligibleIds.has(p.cartola_id)).length} adicionados ao draft
+                  </span>
+                )}
+              </h3>
+              <p className="text-xs text-gray-600 mb-3">
+                Adicione manualmente os jogadores que devem entrar no pool do draft
+              </p>
+              {outros.length === 0 ? (
+                <p className="text-gray-600 text-sm text-center py-4">Nenhum com os filtros atuais</p>
+              ) : (
+                <div className="divide-y divide-gray-800/50">
+                  {outros.map(p => {
+                    const isEligible = eligibleIds.has(p.cartola_id);
+                    const isToggling = togglingId === p.cartola_id;
+                    return (
+                      <div
+                        key={p.cartola_id}
+                        className={isEligible ? 'border-l-2 border-blue-500 rounded-r-lg' : ''}
+                      >
+                        <PlayerRow
+                          player={p}
+                          match={clubMatches[p.club_id] || clubMatches[String(p.club_id)] || null}
+                          action={
+                            <button
+                              onClick={() => handleToggleEligible(p.cartola_id)}
+                              disabled={isToggling}
+                              className={`text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 ${
+                                isEligible
+                                  ? 'bg-blue-900/40 text-blue-300 hover:bg-red-900/40 hover:text-red-300 border border-blue-700 hover:border-red-700'
+                                  : 'bg-gray-800 text-gray-400 hover:bg-green-900/40 hover:text-green-300 border border-gray-700 hover:border-green-700'
+                              }`}
+                            >
+                              {isToggling ? '...' : isEligible ? '✓ Adicionado' : '+ Adicionar'}
+                            </button>
+                          }
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
         </div>
       )}

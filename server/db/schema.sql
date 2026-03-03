@@ -60,6 +60,11 @@ CREATE TABLE IF NOT EXISTS player_scouts (
   UNIQUE(player_id, round_number)
 );
 
+CREATE TABLE IF NOT EXISTS draft_eligible_override (
+  cartola_id INTEGER PRIMARY KEY,
+  added_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS draft_sessions (
   id TEXT PRIMARY KEY,
   created_at TEXT,
