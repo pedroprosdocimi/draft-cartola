@@ -320,6 +320,9 @@ export default function Admin({ onBack }) {
         </div>
       </div>
 
+      {/* ── Simulador de Draft ── */}
+      <SimDraft players={players} clubMatches={clubMatches} />
+
       {loading && players.length === 0 ? (
         <div className="text-center py-16 text-gray-500">Carregando jogadores...</div>
       ) : players.length === 0 ? (
@@ -439,9 +442,6 @@ export default function Admin({ onBack }) {
             </div>
 
           </div>
-
-          {/* ── Simulador de Draft ── */}
-          <SimDraft players={players} />
 
           {/* ── Tabela 2: Não cotados ── */}
           <div className="card">
