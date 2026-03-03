@@ -232,15 +232,22 @@ export default function Admin({ onBack }) {
   }, [players, eligibleIds, tPos, tClub]);
 
   // Club counts for the pool draft sidebar (respects tPos + tClub filters)
+  // Shows ALL clubs that exist in the base pool, even those with 0 after filtering
   const clubCounts = useMemo(() => {
-    const map = {};
+    const countMap = {};
     for (const p of poolDraft) {
-      const id = p.club_id;
-      if (!map[id]) map[id] = { abbr: p.club?.abbreviation || `${id}`, count: 0 };
-      map[id].count++;
+      countMap[p.club_id] = (countMap[p.club_id] || 0) + 1;
     }
-    return Object.values(map).sort((a, b) => b.count - a.count);
-  }, [poolDraft]);
+    const baseClubIds = new Set(
+      players
+        .filter(p => p.status_id === 7 || eligibleIds.has(p.cartola_id))
+        .map(p => p.club_id)
+    );
+    return clubs
+      .filter(c => baseClubIds.has(c.id))
+      .map(c => ({ name: c.name || c.abbreviation, count: countMap[c.id] || 0 }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [poolDraft, players, eligibleIds, clubs]);
 
   // Table 2: não cotados que ainda NÃO foram adicionados ao pool
   const outros = useMemo(() => {
@@ -400,7 +407,7 @@ export default function Admin({ onBack }) {
             </div>
 
             {/* Club count sidebar */}
-            <div className="card lg:w-52 w-full flex-shrink-0">
+            <div className="card lg:w-64 w-full flex-shrink-0">
               <h4 className="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wide">
                 Jogadores por time
               </h4>
@@ -408,23 +415,30 @@ export default function Admin({ onBack }) {
                 <p className="text-gray-600 text-xs text-center py-4">—</p>
               ) : (
                 <div className="space-y-2">
-                  {clubCounts.map(({ abbr, count }) => {
-                    const pct = Math.round((count / clubCounts[0].count) * 100);
-                    return (
-                      <div key={abbr}>
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className="text-xs font-medium text-gray-300">{abbr}</span>
-                          <span className="text-xs font-bold text-cartola-gold">{count}</span>
+                  {(() => {
+                    const maxCount = Math.max(...clubCounts.map(c => c.count), 1);
+                    return clubCounts.map(({ name, count }) => {
+                      const pct = Math.round((count / maxCount) * 100);
+                      return (
+                        <div key={name}>
+                          <div className="flex items-center justify-between mb-0.5">
+                            <span className={`text-xs font-medium truncate mr-2 ${count === 0 ? 'text-gray-600' : 'text-gray-300'}`}>
+                              {name}
+                            </span>
+                            <span className={`text-xs font-bold flex-shrink-0 ${count === 0 ? 'text-gray-600' : 'text-cartola-gold'}`}>
+                              {count}
+                            </span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-gray-800 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-cartola-green transition-all"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
                         </div>
-                        <div className="h-1.5 rounded-full bg-gray-800 overflow-hidden">
-                          <div
-                            className="h-full rounded-full bg-cartola-green transition-all"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    });
+                  })()}
                 </div>
               )}
             </div>
