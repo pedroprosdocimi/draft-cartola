@@ -160,7 +160,7 @@ export default function PlayerCard({
       <button
         onClick={isMyTurn ? onClick : undefined}
         disabled={!isMyTurn}
-        className={`w-44 flex-shrink-0 flex flex-col bg-gray-800 border rounded-xl overflow-hidden transition-all text-left snap-start
+        className={`w-44 flex-shrink-0 flex flex-col bg-gray-800 border rounded-xl overflow-hidden transition-all text-center snap-start
           ${isMyTurn
             ? `border-gray-600 hover:border-cartola-green hover:scale-105 hover:shadow-lg ${POSITION_GLOW[player.position_id]} cursor-pointer active:scale-100`
             : 'border-gray-700 opacity-80 cursor-default'
@@ -181,45 +181,21 @@ export default function PlayerCard({
             <span className="font-extrabold text-white text-base leading-tight line-clamp-2">
               {player.nickname}
             </span>
-            <div className="flex items-center justify-center gap-1.5">
-              <span className={`${posBg} text-white text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0`}>
-                {posLabel}
-              </span>
-              <span className="text-xs text-gray-400 font-medium">{player.club?.abbreviation || ''}</span>
-            </div>
+            <span className={`${posBg} text-white text-xs font-bold px-1.5 py-0.5 rounded`}>
+              {posLabel}
+            </span>
           </div>
 
           {/* Divider + match */}
           {match && (
             <>
               <div className="border-t border-gray-700" />
-              <div className="text-xs text-blue-400 font-medium text-center">{match}</div>
+              <div className="text-center">
+                <div className="text-gray-600 text-xs uppercase tracking-wide mb-0.5">Próximo confronto</div>
+                <div className="text-xs text-blue-400 font-medium">{match}</div>
+              </div>
             </>
           )}
-
-          {/* Divider: média + últimas 4 pontuações */}
-          <div className="border-t border-gray-700 pt-1.5">
-            {/* Média */}
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs text-gray-500">Média</span>
-              <AvgScore score={player.average_score} posAvg={posAvg} />
-            </div>
-            {/* Últimas rodadas */}
-            {player.recentScores?.length > 0 && (
-              <div className="flex gap-1 justify-between">
-                {player.recentScores.slice(0, 4).map(({ round, score }) => {
-                  const s = score || 0;
-                  const color = s >= 5 ? 'text-green-400' : s >= 2 ? 'text-yellow-400' : 'text-red-400';
-                  return (
-                    <div key={round} className="flex-1 flex flex-col items-center bg-gray-900/60 rounded py-1 px-0.5">
-                      <span className="text-gray-600 text-xs leading-none mb-0.5">R{round}</span>
-                      <span className={`text-xs font-bold leading-none ${color}`}>{s.toFixed(1)}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
 
           {/* Stats */}
           <div className="border-t border-gray-700 pt-1">

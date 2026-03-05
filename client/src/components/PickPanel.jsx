@@ -45,7 +45,7 @@ function AvailableSlot({ posId, onPickPosition }) {
 function FilledSlot({ player, posId }) {
   const c = POSITION_COLORS[posId] || POSITION_COLORS[6];
   return (
-    <div className={`w-20 h-28 sm:w-32 sm:h-40 flex flex-col rounded-2xl border ${c.border} bg-gray-800/80 overflow-hidden opacity-60`}>
+    <div className={`w-20 h-28 sm:w-32 sm:h-40 flex flex-col rounded-2xl border ${c.border} bg-gray-800/80 overflow-hidden`}>
       <div className="h-16 sm:h-24 w-full overflow-hidden flex-shrink-0">
         {player.photo
           ? <img src={player.photo} className="w-full h-full object-cover object-top" alt="" />
