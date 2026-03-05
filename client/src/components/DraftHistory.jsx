@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { API_URL } from '../config.js';
 
 const POS_LABEL = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA', 21: 'RES', 22: 'RES', 23: 'RES' };
@@ -55,79 +56,152 @@ function StatusBadge({ status }) {
   return <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/50 text-yellow-400 font-medium">Em andamento</span>;
 }
 
+// ── Options Tooltip (rendered via portal to avoid clipping) ───
+function OptionsTooltip({ pick, accentColor, anchorRect }) {
+  const TOOLTIP_W = 220;
+  const GAP = 8;
+
+  // Prefer right side; fall back to left if not enough room
+  let left = anchorRect.right + GAP;
+  if (left + TOOLTIP_W > window.innerWidth - 8) {
+    left = anchorRect.left - TOOLTIP_W - GAP;
+  }
+  // Clamp vertically
+  let top = anchorRect.top;
+  const tooltipH = 48 + pick.options.length * 36; // rough estimate
+  if (top + tooltipH > window.innerHeight - 8) {
+    top = Math.max(8, window.innerHeight - tooltipH - 8);
+  }
+
+  const chosen = pick.cartola_id;
+
+  return createPortal(
+    <div
+      style={{ position: 'fixed', top, left, width: TOOLTIP_W, zIndex: 9999 }}
+      className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-3 pointer-events-none"
+    >
+      <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+        Opcoes oferecidas
+      </div>
+      <div className="space-y-1.5">
+        {pick.options.map(o => {
+          const isChosen = o.cartola_id === chosen;
+          return (
+            <div
+              key={o.cartola_id}
+              className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${
+                isChosen
+                  ? `${POS_BG[pick.position_id] || 'bg-gray-800 border-gray-700/50'} border`
+                  : 'bg-gray-800/60'
+              }`}
+            >
+              {o.photo_url ? (
+                <img
+                  src={o.photo_url}
+                  className={`w-7 h-7 rounded-full object-cover flex-shrink-0 ${isChosen ? `ring-2 ${accentColor?.ring || 'ring-gray-500'}` : 'ring-1 ring-gray-700'}`}
+                  alt=""
+                />
+              ) : (
+                <div className={`w-7 h-7 rounded-full bg-gray-700 flex-shrink-0 ${isChosen ? `ring-2 ${accentColor?.ring || 'ring-gray-500'}` : 'ring-1 ring-gray-700'}`} />
+              )}
+              <div className="min-w-0 flex-1">
+                <div className={`text-xs font-semibold truncate leading-tight ${isChosen ? 'text-white' : 'text-gray-400'}`}>
+                  {o.nickname || `#${o.cartola_id}`}
+                </div>
+              </div>
+              <div className="flex-shrink-0 text-right">
+                {o.average_score != null && (
+                  <div className={`text-xs font-bold ${isChosen ? 'text-cartola-gold' : 'text-gray-500'}`}>
+                    {o.average_score.toFixed(1)}
+                  </div>
+                )}
+                {isChosen && (
+                  <div className="text-xs text-green-400 leading-none">escolhido</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // ── Pick Cell ─────────────────────────────────────────────────
 function PickCell({ pick, pickNum, accentColor }) {
   const isBench = BENCH_IDS.includes(pick.position_id);
   const posLabel = POS_LABEL[pick.position_id] || `P${pick.position_id}`;
+  const hasOptions = pick.options && pick.options.length > 0;
 
-  // Options: all except the chosen player
-  const otherOptions = pick.options
-    ? pick.options.filter(o => o.cartola_id !== pick.cartola_id)
-    : [];
+  const cellRef = useRef(null);
+  const [anchorRect, setAnchorRect] = useState(null);
+
+  const handleMouseEnter = () => {
+    if (!hasOptions || !cellRef.current) return;
+    setAnchorRect(cellRef.current.getBoundingClientRect());
+  };
+  const handleMouseLeave = () => setAnchorRect(null);
 
   return (
-    <div className={`rounded-lg border p-2 ${POS_BG[pick.position_id] || 'bg-gray-800 border-gray-700/50'} ${isBench ? 'opacity-70' : ''}`}>
-      {/* Top row: pick number + position badge + score */}
-      <div className="flex items-center justify-between mb-2 gap-1">
-        <div className="flex items-center gap-1.5">
-          <span className="text-gray-600 font-mono text-xs leading-none">{pickNum}</span>
-          <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${POS_BADGE_BG[pick.position_id] || 'bg-gray-700 text-gray-400'}`}>
-            {posLabel}
-          </span>
-        </div>
-        {pick.average_score != null && (
-          <span className="text-xs font-bold text-cartola-gold whitespace-nowrap">
-            {pick.average_score.toFixed(1)}
-          </span>
-        )}
-      </div>
-
-      {/* Chosen player */}
-      <div className="flex items-center gap-2">
-        {pick.photo_url ? (
-          <img
-            src={pick.photo_url}
-            className={`w-9 h-9 rounded-full object-cover flex-shrink-0 ring-2 ${accentColor?.ring || 'ring-gray-600'}`}
-            alt=""
-          />
-        ) : (
-          <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center bg-gray-700 ring-2 ${accentColor?.ring || 'ring-gray-600'} text-gray-500 text-xs`}>
-            ?
+    <>
+      <div
+        ref={cellRef}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        className={`rounded-lg border p-2 transition-all ${POS_BG[pick.position_id] || 'bg-gray-800 border-gray-700/50'} ${isBench ? 'opacity-70' : ''} ${hasOptions ? 'cursor-default hover:brightness-125' : ''}`}
+      >
+        {/* Top row: pick number + position badge + score */}
+        <div className="flex items-center justify-between mb-2 gap-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-600 font-mono text-xs leading-none">{pickNum}</span>
+            <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${POS_BADGE_BG[pick.position_id] || 'bg-gray-700 text-gray-400'}`}>
+              {posLabel}
+            </span>
           </div>
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="text-white text-xs font-semibold leading-tight truncate">
-            {pick.nickname || `#${pick.cartola_id}`}
-          </div>
-          <div className="text-gray-500 text-xs truncate mt-0.5">
-            {pick.club_abbreviation || '—'}
-            {pick.price != null && (
-              <span className="ml-1 text-gray-600">C${pick.price.toFixed(0)}</span>
+          <div className="flex items-center gap-1">
+            {pick.average_score != null && (
+              <span className="text-xs font-bold text-cartola-gold whitespace-nowrap">
+                {pick.average_score.toFixed(1)}
+              </span>
+            )}
+            {hasOptions && (
+              <span className="text-gray-600 text-xs leading-none" title="Hover para ver opcoes">⋯</span>
             )}
           </div>
         </div>
-      </div>
 
-      {/* Other options */}
-      {otherOptions.length > 0 && (
-        <div className="mt-2 pt-2 border-t border-gray-700/40 space-y-1">
-          <div className="text-gray-600 text-xs uppercase tracking-wide mb-1">Outras opcoes</div>
-          {otherOptions.map(o => (
-            <div key={o.cartola_id} className="flex items-center gap-1.5 opacity-50 hover:opacity-80 transition-opacity">
-              {o.photo_url ? (
-                <img src={o.photo_url} className="w-5 h-5 rounded-full object-cover flex-shrink-0 ring-1 ring-gray-600" alt="" />
-              ) : (
-                <div className="w-5 h-5 rounded-full bg-gray-700 flex-shrink-0 ring-1 ring-gray-600" />
-              )}
-              <span className="text-gray-400 text-xs truncate flex-1">{o.nickname || `#${o.cartola_id}`}</span>
-              {o.average_score != null && (
-                <span className="text-gray-500 text-xs flex-shrink-0">{o.average_score.toFixed(1)}</span>
+        {/* Chosen player */}
+        <div className="flex items-center gap-2">
+          {pick.photo_url ? (
+            <img
+              src={pick.photo_url}
+              className={`w-9 h-9 rounded-full object-cover flex-shrink-0 ring-2 ${accentColor?.ring || 'ring-gray-600'}`}
+              alt=""
+            />
+          ) : (
+            <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center bg-gray-700 ring-2 ${accentColor?.ring || 'ring-gray-600'} text-gray-500 text-xs`}>
+              ?
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="text-white text-xs font-semibold leading-tight truncate">
+              {pick.nickname || `#${pick.cartola_id}`}
+            </div>
+            <div className="text-gray-500 text-xs truncate mt-0.5">
+              {pick.club_abbreviation || '—'}
+              {pick.price != null && (
+                <span className="ml-1 text-gray-600">C${pick.price.toFixed(0)}</span>
               )}
             </div>
-          ))}
+          </div>
         </div>
+      </div>
+
+      {anchorRect && hasOptions && (
+        <OptionsTooltip pick={pick} accentColor={accentColor} anchorRect={anchorRect} />
       )}
-    </div>
+    </>
   );
 }
 
