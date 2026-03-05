@@ -3,17 +3,44 @@ import { API_URL } from '../config.js';
 
 const POS_LABEL = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA', 21: 'RES', 22: 'RES', 23: 'RES' };
 const POS_COLORS = {
-  1: 'text-yellow-400', 2: 'text-blue-400', 3: 'text-red-400',
-  4: 'text-purple-400', 5: 'text-green-400',
+  1: 'text-yellow-300', 2: 'text-blue-300', 3: 'text-red-300',
+  4: 'text-purple-300', 5: 'text-green-300',
   21: 'text-gray-400', 22: 'text-gray-400', 23: 'text-gray-400',
 };
 const POS_BG = {
-  1: 'bg-yellow-900/40', 2: 'bg-blue-900/40', 3: 'bg-red-900/40',
-  4: 'bg-purple-900/40', 5: 'bg-green-900/40',
-  21: 'bg-gray-800', 22: 'bg-gray-800', 23: 'bg-gray-800',
+  1: 'bg-yellow-900/60 border-yellow-700/50',
+  2: 'bg-blue-900/60 border-blue-700/50',
+  3: 'bg-red-900/60 border-red-700/50',
+  4: 'bg-purple-900/60 border-purple-700/50',
+  5: 'bg-green-900/60 border-green-700/50',
+  21: 'bg-gray-800 border-gray-700/50',
+  22: 'bg-gray-800 border-gray-700/50',
+  23: 'bg-gray-800 border-gray-700/50',
+};
+const POS_BADGE_BG = {
+  1: 'bg-yellow-800/80 text-yellow-300',
+  2: 'bg-blue-800/80 text-blue-300',
+  3: 'bg-red-800/80 text-red-300',
+  4: 'bg-purple-800/80 text-purple-300',
+  5: 'bg-green-800/80 text-green-300',
+  21: 'bg-gray-700 text-gray-400',
+  22: 'bg-gray-700 text-gray-400',
+  23: 'bg-gray-700 text-gray-400',
 };
 const POS_ORDER = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 21: 5, 22: 6, 23: 7 };
 const BENCH_IDS = [21, 22, 23];
+
+// Participant accent colors for column headers
+const PARTICIPANT_COLORS = [
+  { ring: 'ring-blue-500',   header: 'bg-blue-900/30 border-blue-700/50',   name: 'text-blue-300'   },
+  { ring: 'ring-green-500',  header: 'bg-green-900/30 border-green-700/50', name: 'text-green-300'  },
+  { ring: 'ring-yellow-500', header: 'bg-yellow-900/30 border-yellow-700/50',name: 'text-yellow-300' },
+  { ring: 'ring-red-500',    header: 'bg-red-900/30 border-red-700/50',     name: 'text-red-300'    },
+  { ring: 'ring-purple-500', header: 'bg-purple-900/30 border-purple-700/50',name: 'text-purple-300' },
+  { ring: 'ring-orange-500', header: 'bg-orange-900/30 border-orange-700/50',name: 'text-orange-300' },
+  { ring: 'ring-pink-500',   header: 'bg-pink-900/30 border-pink-700/50',   name: 'text-pink-300'   },
+  { ring: 'ring-teal-500',   header: 'bg-teal-900/30 border-teal-700/50',   name: 'text-teal-300'   },
+];
 
 function formatDate(str) {
   if (!str) return '—';
@@ -22,18 +49,187 @@ function formatDate(str) {
 }
 
 function StatusBadge({ status }) {
-  if (status === 'completed') {
+  if (status === 'complete') {
     return <span className="text-xs px-2 py-0.5 rounded-full bg-green-900/50 text-green-400 font-medium">Finalizado</span>;
   }
   return <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/50 text-yellow-400 font-medium">Em andamento</span>;
 }
 
-// ── Detail view ──────────────────────────────────────────────
+// ── Pick Cell ─────────────────────────────────────────────────
+function PickCell({ pick, pickNum, accentColor }) {
+  const isBench = BENCH_IDS.includes(pick.position_id);
+  const posLabel = POS_LABEL[pick.position_id] || `P${pick.position_id}`;
+
+  return (
+    <div className={`rounded-lg border p-2 ${POS_BG[pick.position_id] || 'bg-gray-800 border-gray-700/50'} ${isBench ? 'opacity-70' : ''}`}>
+      {/* Top row: pick number + position badge + score */}
+      <div className="flex items-center justify-between mb-2 gap-1">
+        <div className="flex items-center gap-1.5">
+          <span className="text-gray-600 font-mono text-xs leading-none">{pickNum}</span>
+          <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${POS_BADGE_BG[pick.position_id] || 'bg-gray-700 text-gray-400'}`}>
+            {posLabel}
+          </span>
+        </div>
+        {pick.average_score != null && (
+          <span className="text-xs font-bold text-cartola-gold whitespace-nowrap">
+            {pick.average_score.toFixed(1)}
+          </span>
+        )}
+      </div>
+
+      {/* Player row: photo + name */}
+      <div className="flex items-center gap-2">
+        {pick.photo_url ? (
+          <img
+            src={pick.photo_url}
+            className={`w-9 h-9 rounded-full object-cover flex-shrink-0 ring-2 ${accentColor?.ring || 'ring-gray-600'}`}
+            alt=""
+          />
+        ) : (
+          <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center bg-gray-700 ring-2 ${accentColor?.ring || 'ring-gray-600'} text-gray-500 text-xs`}>
+            ?
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="text-white text-xs font-semibold leading-tight truncate">
+            {pick.nickname || `#${pick.cartola_id}`}
+          </div>
+          <div className="text-gray-500 text-xs truncate mt-0.5">
+            {pick.club_abbreviation || '—'}
+            {pick.price != null && (
+              <span className="ml-1 text-gray-600">C${pick.price.toFixed(0)}</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyCell() {
+  return (
+    <div className="rounded-lg border border-dashed border-gray-800 p-2 h-[82px] flex items-center justify-center">
+      <span className="text-gray-700 text-xs">—</span>
+    </div>
+  );
+}
+
+// ── Draft Board ───────────────────────────────────────────────
+function DraftBoard({ participants, picks }) {
+  const N = participants.length;
+  if (N === 0 || picks.length === 0) {
+    return <p className="text-gray-500 text-sm text-center py-6">Nenhuma pick registrada.</p>;
+  }
+
+  // Sort participants by pick_order for consistent column order
+  const sortedParticipants = [...participants].sort((a, b) => (a.pick_order || 0) - (b.pick_order || 0));
+
+  // Color map: participantId → accent
+  const colorMap = {};
+  sortedParticipants.forEach((p, i) => {
+    colorMap[p.id] = PARTICIPANT_COLORS[i % PARTICIPANT_COLORS.length];
+  });
+
+  // Group picks into rounds: round = Math.ceil(overall_pick / N)
+  const rounds = {};
+  for (const pick of picks) {
+    const roundNum = pick.overall_pick != null ? Math.ceil(pick.overall_pick / N) : null;
+    if (roundNum == null) continue;
+    if (!rounds[roundNum]) rounds[roundNum] = {};
+    rounds[roundNum][pick.participant_id] = pick;
+  }
+
+  const roundNumbers = Object.keys(rounds).map(Number).sort((a, b) => a - b);
+
+  // Detect where bench rounds start (position_id in BENCH_IDS)
+  const firstBenchRound = roundNumbers.find(r =>
+    Object.values(rounds[r]).some(p => BENCH_IDS.includes(p.position_id))
+  );
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="border-separate border-spacing-1" style={{ minWidth: `${120 + N * 172}px` }}>
+        <thead>
+          <tr>
+            {/* Round label column */}
+            <th className="w-12" />
+            {sortedParticipants.map((p, i) => {
+              const accent = colorMap[p.id];
+              return (
+                <th key={p.id} className="text-center px-1 py-1">
+                  <div className={`rounded-lg border px-2 py-2 ${accent.header}`}>
+                    <div className={`font-bold text-sm ${accent.name}`}>{p.name}</div>
+                    <div className="text-gray-500 text-xs mt-0.5 font-mono">{p.formation}</div>
+                    <div className="text-gray-600 text-xs mt-0.5">Pick #{i + 1}</div>
+                  </div>
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {roundNumbers.map((roundNum, rowIdx) => {
+            const isSnakeReverse = roundNum % 2 === 0;
+            const isBenchStart = roundNum === firstBenchRound;
+            const isBenchRound = firstBenchRound != null && roundNum >= firstBenchRound;
+
+            return (
+              <React.Fragment key={roundNum}>
+                {/* Separator before bench rounds */}
+                {isBenchStart && (
+                  <tr>
+                    <td colSpan={N + 1} className="py-1 px-2">
+                      <div className="flex items-center gap-2">
+                        <div className="h-px flex-1 bg-gray-700" />
+                        <span className="text-xs text-gray-500 font-medium uppercase tracking-wide px-2">Reservas</span>
+                        <div className="h-px flex-1 bg-gray-700" />
+                      </div>
+                    </td>
+                  </tr>
+                )}
+
+                <tr className={isBenchRound ? 'opacity-80' : ''}>
+                  {/* Round indicator */}
+                  <td className="text-right pr-1 align-middle">
+                    <div className="flex flex-col items-center gap-0.5 py-1">
+                      <span className={`text-xs font-bold ${isBenchRound ? 'text-gray-600' : 'text-gray-400'}`}>
+                        R{roundNum}
+                      </span>
+                      <span className="text-gray-700 text-xs leading-none">
+                        {isSnakeReverse ? '←' : '→'}
+                      </span>
+                    </div>
+                  </td>
+
+                  {/* Cells per participant */}
+                  {sortedParticipants.map(p => {
+                    const pick = rounds[roundNum]?.[p.id];
+                    const globalPickNum = pick?.overall_pick;
+                    return (
+                      <td key={p.id} className="align-top px-0.5 py-0.5" style={{ width: '172px', minWidth: '172px' }}>
+                        {pick
+                          ? <PickCell pick={pick} pickNum={globalPickNum} accentColor={colorMap[p.id]} />
+                          : <EmptyCell />
+                        }
+                      </td>
+                    );
+                  })}
+                </tr>
+              </React.Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── Detail view ───────────────────────────────────────────────
 function DraftDetail({ draftId, onBack }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [view, setView] = useState('timeline'); // 'timeline' | 'teams'
+  const [view, setView] = useState('board'); // 'board' | 'teams'
   const [activeParticipant, setActiveParticipant] = useState(null);
 
   const token = localStorage.getItem('draft_token');
@@ -59,7 +255,7 @@ function DraftDetail({ draftId, onBack }) {
 
   const { session, participants, picks } = data;
 
-  // Build team map: participantId -> picks[]
+  // Build team map
   const teamMap = {};
   for (const p of participants) teamMap[p.id] = [];
   for (const pick of picks) {
@@ -70,13 +266,6 @@ function DraftDetail({ draftId, onBack }) {
   const mainPicks = activeTeam.filter(p => !BENCH_IDS.includes(p.position_id)).sort((a, b) => (POS_ORDER[a.position_id] ?? 9) - (POS_ORDER[b.position_id] ?? 9));
   const benchPicks = activeTeam.filter(p => BENCH_IDS.includes(p.position_id));
   const totalScore = (arr) => arr.filter(p => !BENCH_IDS.includes(p.position_id)).reduce((s, p) => s + (p.average_score || 0), 0);
-
-  // Build pick-owner name map for timeline
-  const participantNames = {};
-  for (const p of participants) participantNames[p.id] = p.name;
-
-  // Colors for each participant in timeline
-  const participantColors = ['text-blue-400', 'text-green-400', 'text-yellow-400', 'text-red-400', 'text-purple-400', 'text-orange-400', 'text-pink-400', 'text-teal-400'];
 
   return (
     <div>
@@ -100,10 +289,10 @@ function DraftDetail({ draftId, onBack }) {
       {/* Sub-tabs */}
       <div className="flex gap-2 mb-4">
         <button
-          onClick={() => setView('timeline')}
-          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${view === 'timeline' ? 'bg-cartola-green text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+          onClick={() => setView('board')}
+          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${view === 'board' ? 'bg-cartola-green text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
         >
-          Linha do Tempo
+          Draft Board
         </button>
         <button
           onClick={() => setView('teams')}
@@ -113,67 +302,22 @@ function DraftDetail({ draftId, onBack }) {
         </button>
       </div>
 
-      {/* Timeline view */}
-      {view === 'timeline' && (
-        <div className="card">
-          {picks.length === 0 ? (
-            <p className="text-gray-500 text-sm text-center py-6">Nenhuma pick registrada.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-800">
-                    <th className="text-left py-2 px-3 text-gray-500 font-medium w-10">#</th>
-                    <th className="text-left py-2 px-3 text-gray-500 font-medium">Participante</th>
-                    <th className="text-left py-2 px-3 text-gray-500 font-medium">Pos</th>
-                    <th className="text-left py-2 px-3 text-gray-500 font-medium">Jogador</th>
-                    <th className="text-left py-2 px-3 text-gray-500 font-medium hidden sm:table-cell">Clube</th>
-                    <th className="text-right py-2 px-3 text-gray-500 font-medium hidden sm:table-cell">Média</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {picks.map((pick, i) => {
-                    const ownerIdx = participants.findIndex(p => p.id === pick.participant_id);
-                    const color = participantColors[ownerIdx % participantColors.length];
-                    return (
-                      <tr key={pick.overall_pick ?? i} className="border-b border-gray-800/40 hover:bg-gray-800/30">
-                        <td className="py-2 px-3 text-gray-600 font-mono text-xs">{pick.overall_pick ?? i + 1}</td>
-                        <td className={`py-2 px-3 font-medium ${color}`}>
-                          {participantNames[pick.participant_id] || pick.participant_id}
-                        </td>
-                        <td className="py-2 px-3">
-                          <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${POS_BG[pick.position_id]} ${POS_COLORS[pick.position_id]}`}>
-                            {POS_LABEL[pick.position_id] || `Pos${pick.position_id}`}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3">
-                          <div className="flex items-center gap-2">
-                            {pick.photo_url && (
-                              <img src={pick.photo_url} className="w-6 h-6 rounded-full object-cover flex-shrink-0" alt="" />
-                            )}
-                            <span className="text-white font-medium truncate">{pick.nickname || `#${pick.cartola_id}`}</span>
-                          </div>
-                        </td>
-                        <td className="py-2 px-3 text-gray-400 hidden sm:table-cell">{pick.club_abbreviation || '—'}</td>
-                        <td className="py-2 px-3 text-right text-cartola-gold font-semibold hidden sm:table-cell">
-                          {pick.average_score != null ? pick.average_score.toFixed(1) : '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+      {/* Draft Board view */}
+      {view === 'board' && (
+        <div className="card overflow-hidden">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-300">Draft Board</h3>
+            <span className="text-xs text-gray-600">{picks.length} picks · {Math.ceil(picks.length / Math.max(participants.length, 1))} rodadas</span>
+          </div>
+          <DraftBoard participants={participants} picks={picks} />
         </div>
       )}
 
       {/* Teams view */}
       {view === 'teams' && (
         <div>
-          {/* Participant tabs */}
           <div className="flex gap-2 flex-wrap mb-4">
-            {participants.map(p => (
+            {[...participants].sort((a, b) => (a.pick_order || 0) - (b.pick_order || 0)).map(p => (
               <button
                 key={p.id}
                 onClick={() => setActiveParticipant(p.id)}
@@ -189,9 +333,7 @@ function DraftDetail({ draftId, onBack }) {
             <div className="card">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="font-bold text-white">
-                    {participants.find(p => p.id === activeParticipant)?.name}
-                  </h3>
+                  <h3 className="font-bold text-white">{participants.find(p => p.id === activeParticipant)?.name}</h3>
                   <p className="text-xs text-gray-500">
                     {participants.find(p => p.id === activeParticipant)?.formation} · {activeTeam.length} jogadores
                   </p>
@@ -212,8 +354,8 @@ function DraftDetail({ draftId, onBack }) {
                         <th className="text-left py-2 px-3 text-gray-500 font-medium">Pos</th>
                         <th className="text-left py-2 px-3 text-gray-500 font-medium">Jogador</th>
                         <th className="text-left py-2 px-3 text-gray-500 font-medium hidden sm:table-cell">Clube</th>
-                        <th className="text-right py-2 px-3 text-gray-500 font-medium">Média</th>
-                        <th className="text-right py-2 px-3 text-gray-500 font-medium hidden sm:table-cell">Preço</th>
+                        <th className="text-right py-2 px-3 text-gray-500 font-medium">Media</th>
+                        <th className="text-right py-2 px-3 text-gray-500 font-medium hidden sm:table-cell">Preco</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -280,7 +422,7 @@ function DraftDetail({ draftId, onBack }) {
   );
 }
 
-// ── List view ────────────────────────────────────────────────
+// ── List view ─────────────────────────────────────────────────
 export default function DraftHistory() {
   const [drafts, setDrafts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -305,8 +447,8 @@ export default function DraftHistory() {
       .finally(() => setLoading(false));
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const inProgress = drafts.filter(d => d.status !== 'completed');
-  const completed = drafts.filter(d => d.status === 'completed');
+  const inProgress = drafts.filter(d => d.status !== 'complete');
+  const completed = drafts.filter(d => d.status === 'complete');
 
   if (selectedId) {
     return (
