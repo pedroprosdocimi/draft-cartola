@@ -94,6 +94,76 @@ router.delete('/admin/eligible/:cartolaId', async (req, res) => {
   }
 });
 
+// GET /api/admin/drafts — list all draft sessions with participant count
+router.get('/admin/drafts', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        ds.id,
+        ds.status,
+        ds.created_at,
+        ds.completed_at,
+        COUNT(dp.id)::int AS participant_count
+      FROM draft_sessions ds
+      LEFT JOIN draft_participants dp ON dp.session_id = ds.id
+      GROUP BY ds.id
+      ORDER BY ds.created_at DESC
+    `);
+    res.json({ drafts: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/drafts/:id — full draft detail
+router.get('/admin/drafts/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const sessionRes = await pool.query('SELECT * FROM draft_sessions WHERE id = $1', [id]);
+    if (!sessionRes.rows.length) return res.status(404).json({ error: 'Draft não encontrado' });
+
+    const participantsRes = await pool.query(
+      'SELECT id, name, formation, pick_order FROM draft_participants WHERE session_id = $1 ORDER BY pick_order',
+      [id]
+    );
+
+    const picksRes = await pool.query(`
+      SELECT
+        dp.overall_pick,
+        dp.participant_id,
+        dp.cartola_id,
+        dp.position_id,
+        dp.picked_at,
+        p.nickname,
+        p.photo_url,
+        latest.average_score,
+        latest.price,
+        latest.club_id,
+        c.abbreviation AS club_abbreviation
+      FROM draft_picks dp
+      LEFT JOIN players p ON p.cartola_id = dp.cartola_id
+      LEFT JOIN LATERAL (
+        SELECT average_score, price, club_id
+        FROM player_round_data
+        WHERE player_id = p.id
+        ORDER BY round_id DESC
+        LIMIT 1
+      ) latest ON true
+      LEFT JOIN clubs c ON c.id = latest.club_id
+      WHERE dp.session_id = $1
+      ORDER BY dp.overall_pick
+    `, [id]);
+
+    res.json({
+      session: sessionRes.rows[0],
+      participants: participantsRes.rows,
+      picks: picksRes.rows,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });

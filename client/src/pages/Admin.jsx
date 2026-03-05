@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { API_URL } from '../config.js';
 import SimDraft from '../components/SimDraft.jsx';
+import DraftHistory from '../components/DraftHistory.jsx';
 
 const POS_LABELS = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA' };
 const POS_ORDER = [1, 2, 3, 4, 5];
@@ -318,6 +319,11 @@ export default function Admin({ onBack }) {
             {syncing ? 'Sincronizando...' : 'Sincronizar Cartola'}
           </button>
         </div>
+      </div>
+
+      {/* ── Historico de Drafts ── */}
+      <div className="mb-6">
+        <DraftHistory />
       </div>
 
       {/* ── Simulador de Draft ── */}
