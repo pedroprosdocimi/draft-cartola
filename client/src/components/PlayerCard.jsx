@@ -16,69 +16,46 @@ const POSITION_GLOW = {
   5: 'hover:shadow-red-600/40',
 };
 
-// Full descriptions shown in tooltip on hover
-const SCOUT_LABELS = {
-  G:  'Gol',
-  A:  'Assistência',
-  DS: 'Desarme',
-  DE: 'Defesa',
-  SG: 'Sem Gol Sofrido (clean sheet)',
-  DD: 'Defesa Difícil',
-  DP: 'Defesa de Pênalti',
-  GS: 'Gol Sofrido',
-  FF: 'Finalização pra Fora',
-  FT: 'Finalização na Trave',
-  FS: 'Falta Sofrida',
-  FD: 'Falta Desfeita',
-  CA: 'Cartão Amarelo',
-  CV: 'Cartão Vermelho',
-  I:  'Impedimento',
-  PP: 'Pênalti Perdido',
-  PC: 'Pênalti Cometido',
-  FC: 'Falta Cometida',
-};
-
-// [key, isPositive] — ordered by relevance per position
 const SCOUT_CONFIG = {
   1: [ // GOL
-    ['DE', true],
-    ['SG', true],
-    ['DD', true],
-    ['DP', true],
-    ['GS', false],
-    ['CV', false],
+    { key: 'DE',  label: 'Defesa',              icon: '🧤', positive: true  },
+    { key: 'SG',  label: 'Sem Gol Sofrido',     icon: '🔒', positive: true  },
+    { key: 'DD',  label: 'Defesa Difícil',       icon: '⭐', positive: true  },
+    { key: 'DP',  label: 'Defesa de Pênalti',   icon: '🏆', positive: true  },
+    { key: 'GS',  label: 'Gol Sofrido',         icon: '💀', positive: false },
+    { key: 'CV',  label: 'Cartão Vermelho',      icon: '🟥', positive: false },
   ],
   2: [ // LAT
-    ['DS', true],
-    ['SG', true],
-    ['A',  true],
-    ['FS', true],
-    ['CA', false],
-    ['CV', false],
+    { key: 'DS',  label: 'Desarme',             icon: '🛡️', positive: true  },
+    { key: 'SG',  label: 'Sem Gol Sofrido',     icon: '🔒', positive: true  },
+    { key: 'A',   label: 'Assistência',          icon: '🎯', positive: true  },
+    { key: 'FS',  label: 'Falta Sofrida',        icon: '🤸', positive: true  },
+    { key: 'CA',  label: 'Cartão Amarelo',       icon: '🟨', positive: false },
+    { key: 'CV',  label: 'Cartão Vermelho',      icon: '🟥', positive: false },
   ],
   3: [ // ZAG
-    ['DS', true],
-    ['SG', true],
-    ['G',  true],
-    ['A',  true],
-    ['CA', false],
-    ['CV', false],
+    { key: 'DS',  label: 'Desarme',             icon: '🛡️', positive: true  },
+    { key: 'SG',  label: 'Sem Gol Sofrido',     icon: '🔒', positive: true  },
+    { key: 'G',   label: 'Gol',                 icon: '⚽', positive: true  },
+    { key: 'A',   label: 'Assistência',          icon: '🎯', positive: true  },
+    { key: 'CA',  label: 'Cartão Amarelo',       icon: '🟨', positive: false },
+    { key: 'CV',  label: 'Cartão Vermelho',      icon: '🟥', positive: false },
   ],
   4: [ // MEI
-    ['A',  true],
-    ['G',  true],
-    ['DS', true],
-    ['FS', true],
-    ['CA', false],
-    ['CV', false],
+    { key: 'A',   label: 'Assistência',          icon: '🎯', positive: true  },
+    { key: 'G',   label: 'Gol',                 icon: '⚽', positive: true  },
+    { key: 'DS',  label: 'Desarme',             icon: '🛡️', positive: true  },
+    { key: 'FS',  label: 'Falta Sofrida',        icon: '🤸', positive: true  },
+    { key: 'CA',  label: 'Cartão Amarelo',       icon: '🟨', positive: false },
+    { key: 'CV',  label: 'Cartão Vermelho',      icon: '🟥', positive: false },
   ],
   5: [ // ATA
-    ['G',  true],
-    ['A',  true],
-    ['FF', true],
-    ['FT', true],
-    ['CA', false],
-    ['CV', false],
+    { key: 'G',   label: 'Gol',                 icon: '⚽', positive: true  },
+    { key: 'A',   label: 'Assistência',          icon: '🎯', positive: true  },
+    { key: 'FF',  label: 'Finalização Fora',     icon: '📤', positive: true  },
+    { key: 'FT',  label: 'Finalização na Trave', icon: '🏗️', positive: true  },
+    { key: 'CA',  label: 'Cartão Amarelo',       icon: '🟨', positive: false },
+    { key: 'CV',  label: 'Cartão Vermelho',      icon: '🟥', positive: false },
   ],
 };
 
@@ -87,71 +64,60 @@ function AvgScore({ score, posAvg }) {
   const hasAvg = posAvg != null;
   const above = s >= posAvg;
   const color = !hasAvg ? 'text-cartola-gold' : above ? 'text-green-400' : 'text-red-400';
-
-  return (
-    <span className="relative group cursor-default">
-      <span className={`${color} text-xs font-semibold`}>{s.toFixed(1)}</span>
-      {hasAvg && (
-        <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 rounded bg-gray-900 border border-gray-700 text-gray-100 text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-30">
-          Média por Posição: {posAvg.toFixed(1)} · <span className={above ? 'text-green-400' : 'text-red-400'}>{above ? 'Acima' : 'Abaixo'} da média</span>
-        </span>
-      )}
-    </span>
-  );
+  return <span className={`${color} text-xs font-semibold`}>{s.toFixed(1)}</span>;
 }
 
-function ScoutBadge({ scoutKey, val, positive, posAvg }) {
-  const hasAvg = posAvg != null;
+// Row: icon + full label on the left, value on the right
+function StatRow({ icon, label, val, positive, posAvg }) {
   const roundedVal = Math.round(val);
-
-  let color, tooltipSuffix;
-  if (!hasAvg) {
+  let color;
+  if (posAvg == null) {
     color = positive ? 'text-green-400' : 'text-red-400';
   } else if (val === posAvg) {
     color = 'text-yellow-400';
-    tooltipSuffix = <span className="text-yellow-400">Na média</span>;
   } else {
     const rawAbove = val > posAvg;
-    const good = positive ? rawAbove : !rawAbove;
-    color = good ? 'text-green-400' : 'text-red-400';
-    tooltipSuffix = (
-      <span className={good ? 'text-green-400' : 'text-red-400'}>
-        {rawAbove ? 'Acima' : 'Abaixo'} da média
-      </span>
-    );
+    color = (positive ? rawAbove : !rawAbove) ? 'text-green-400' : 'text-red-400';
   }
 
   return (
-    <span className="relative group cursor-default">
-      <span className={color}>
-        {scoutKey}{' '}
-        <span className="font-semibold">{roundedVal}</span>
-      </span>
-      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 rounded bg-gray-900 border border-gray-700 text-gray-100 text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-30">
-        {SCOUT_LABELS[scoutKey] || scoutKey}
-        {hasAvg && <> · Média: {posAvg.toFixed(1)} · {tooltipSuffix}</>}
-      </span>
-    </span>
+    <div className="flex items-center gap-1.5 py-0.5">
+      <span className="text-sm leading-none w-5 text-center flex-shrink-0">{icon}</span>
+      <span className="text-gray-400 text-xs flex-1 leading-tight">{label}</span>
+      <span className={`text-xs font-bold flex-shrink-0 ${color}`}>{roundedVal}</span>
+    </div>
   );
 }
 
-function ScoutBadges({ scouts, positionId, scoutPositionAvgs }) {
+function StatRows({ scouts, positionId, scoutPositionAvgs }) {
   const config = SCOUT_CONFIG[positionId];
   if (!config) return null;
-
-  const badges = config
-    .map(([key, positive]) => ({ key, positive, val: scouts?.stats?.[key] ?? 0 }));
-
   return (
-    <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 text-xs pt-0.5">
-      {badges.map(({ key, positive, val }) => (
-        <ScoutBadge key={key} scoutKey={key} val={val} positive={positive} posAvg={scoutPositionAvgs?.[key] ?? null} />
+    <div className="divide-y divide-gray-700/40">
+      {config.map(({ key, label, icon, positive }) => (
+        <StatRow
+          key={key}
+          icon={icon}
+          label={label}
+          val={scouts?.stats?.[key] ?? 0}
+          positive={positive}
+          posAvg={scoutPositionAvgs?.[key] ?? null}
+        />
       ))}
     </div>
   );
 }
 
-export default function PlayerCard({ player, onClick, isMyTurn, compact = false, card = false, match = null, positionAverages = {}, scoutPositionAverages = {} }) {
+export default function PlayerCard({
+  player,
+  onClick,
+  isMyTurn,
+  compact = false,
+  card = false,
+  match = null,
+  positionAverages = {},
+  scoutPositionAverages = {},
+}) {
   const posAvg = positionAverages[player.position_id] ?? null;
   const scoutPositionAvgs = scoutPositionAverages[player.position_id] ?? null;
   const posLabel = POSITION_LABELS[player.position_id] || '?';
@@ -188,41 +154,52 @@ export default function PlayerCard({ player, onClick, isMyTurn, compact = false,
     );
   }
 
-  // ── Card: vertical "cartinha" for the pick modal ──────────────────────────
+  // ── Card: vertical with stats ─────────────────────────────────────────────
   if (card) {
     return (
       <button
         onClick={isMyTurn ? onClick : undefined}
         disabled={!isMyTurn}
-        className={`w-28 sm:w-36 flex flex-col bg-gray-800 border rounded-xl overflow-visible transition-all text-left
+        className={`w-44 flex-shrink-0 flex flex-col bg-gray-800 border rounded-xl overflow-hidden transition-all text-left snap-start
           ${isMyTurn
             ? `border-gray-600 hover:border-cartola-green hover:scale-105 hover:shadow-lg ${POSITION_GLOW[player.position_id]} cursor-pointer active:scale-100`
             : 'border-gray-700 opacity-80 cursor-default'
           }`}
       >
-        {/* Photo area */}
-        <div className="relative bg-gray-900 h-28 sm:h-36 overflow-hidden rounded-t-xl flex items-center justify-center">
-          <div className={`absolute top-0 left-0 right-0 h-1.5 ${posBg}`} />
+        {/* Photo */}
+        <div className="relative bg-gray-900 h-44 w-full overflow-hidden flex-shrink-0">
+          <div className={`absolute top-0 left-0 right-0 h-1.5 z-10 ${posBg}`} />
           {player.photo
             ? <img src={player.photo} alt={player.nickname} className="w-full h-full object-cover object-top" />
-            : <span className="text-4xl sm:text-5xl text-gray-700">?</span>}
-        </div>
-
-        {/* Info area */}
-        <div className="flex-1 p-1.5 sm:p-2 flex flex-col items-center text-center gap-0.5 sm:gap-1">
-          <div className="font-bold text-white text-xs sm:text-sm leading-tight w-full truncate">{player.nickname}</div>
-
-          <div className="flex items-center gap-1 sm:gap-1.5">
-            <span className={`${posBg} text-white text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded`}>{posLabel}</span>
+            : <span className="absolute inset-0 flex items-center justify-center text-5xl text-gray-700">?</span>}
+          {/* Score badge over photo */}
+          <div className="absolute bottom-2 right-2 bg-black/70 rounded-lg px-1.5 py-0.5">
             <AvgScore score={player.average_score} posAvg={posAvg} />
           </div>
+        </div>
 
-          <div className="w-full border-t border-gray-700 my-0.5 sm:my-1" />
+        {/* Info */}
+        <div className="flex flex-col p-2 gap-1 flex-1">
+          {/* Name + pos */}
+          <div className="flex items-start gap-1.5">
+            <span className={`${posBg} text-white text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5`}>
+              {posLabel}
+            </span>
+            <span className="font-bold text-white text-sm leading-tight line-clamp-2">{player.nickname}</span>
+          </div>
 
+          {/* Club + match */}
           <div className="text-xs text-gray-400 font-medium">{player.club?.abbreviation || ''}</div>
           {match && <div className="text-xs text-blue-400 font-medium">{match}</div>}
 
-          <ScoutBadges scouts={player.scouts} positionId={player.position_id} scoutPositionAvgs={scoutPositionAvgs} />
+          {/* Stats */}
+          <div className="border-t border-gray-700 mt-1 pt-1">
+            <StatRows
+              scouts={player.scouts}
+              positionId={player.position_id}
+              scoutPositionAvgs={scoutPositionAvgs}
+            />
+          </div>
         </div>
       </button>
     );

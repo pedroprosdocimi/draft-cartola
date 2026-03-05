@@ -157,7 +157,8 @@ export default function PickPanel({
               : <><strong className="text-white">{currentPickerName}</strong> está escolhendo...</>}
           </p>
         </div>
-        <div className="flex gap-2 sm:gap-3 flex-wrap justify-center">
+        {/* Mobile: horizontal scroll · Desktop: centered wrap */}
+        <div className="flex gap-2 sm:gap-3 overflow-x-auto sm:overflow-visible sm:flex-wrap sm:justify-center pb-2 sm:pb-0 px-2 sm:px-0 snap-x snap-mandatory w-full max-w-full">
           {offeredPlayers.map(player => (
             <PlayerCard
               key={player.cartola_id}

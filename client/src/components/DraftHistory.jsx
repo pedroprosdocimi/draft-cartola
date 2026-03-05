@@ -4,29 +4,29 @@ import { API_URL } from '../config.js';
 
 const POS_LABEL = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA', 21: 'RES', 22: 'RES', 23: 'RES' };
 const POS_COLORS = {
-  1: 'text-yellow-300', 2: 'text-blue-300', 3: 'text-red-300',
-  4: 'text-purple-300', 5: 'text-green-300',
-  21: 'text-gray-400', 22: 'text-gray-400', 23: 'text-gray-400',
+  1: 'text-blue-300', 2: 'text-green-300', 3: 'text-green-300',
+  4: 'text-yellow-300', 5: 'text-red-300',
+  21: 'text-green-400', 22: 'text-yellow-400', 23: 'text-red-400',
 };
 const POS_BG = {
-  1: 'bg-yellow-900/60 border-yellow-700/50',
-  2: 'bg-blue-900/60 border-blue-700/50',
-  3: 'bg-red-900/60 border-red-700/50',
-  4: 'bg-purple-900/60 border-purple-700/50',
-  5: 'bg-green-900/60 border-green-700/50',
-  21: 'bg-gray-800 border-gray-700/50',
-  22: 'bg-gray-800 border-gray-700/50',
-  23: 'bg-gray-800 border-gray-700/50',
+  1: 'bg-blue-900/50 border-blue-500/50',
+  2: 'bg-green-900/50 border-green-600/50',
+  3: 'bg-green-900/50 border-green-600/50',
+  4: 'bg-yellow-900/50 border-yellow-500/50',
+  5: 'bg-red-900/50 border-red-500/50',
+  21: 'bg-green-900/40 border-green-700/50',
+  22: 'bg-yellow-900/40 border-yellow-700/50',
+  23: 'bg-red-900/40 border-red-700/50',
 };
 const POS_BADGE_BG = {
-  1: 'bg-yellow-800/80 text-yellow-300',
-  2: 'bg-blue-800/80 text-blue-300',
-  3: 'bg-red-800/80 text-red-300',
-  4: 'bg-purple-800/80 text-purple-300',
-  5: 'bg-green-800/80 text-green-300',
-  21: 'bg-gray-700 text-gray-400',
-  22: 'bg-gray-700 text-gray-400',
-  23: 'bg-gray-700 text-gray-400',
+  1: 'bg-blue-800/80 text-blue-300',
+  2: 'bg-green-800/80 text-green-300',
+  3: 'bg-green-800/80 text-green-300',
+  4: 'bg-yellow-800/80 text-yellow-300',
+  5: 'bg-red-800/80 text-red-300',
+  21: 'bg-green-800/60 text-green-400',
+  22: 'bg-yellow-800/60 text-yellow-400',
+  23: 'bg-red-800/60 text-red-400',
 };
 const POS_ORDER = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 21: 5, 22: 6, 23: 7 };
 const BENCH_IDS = [21, 22, 23];
