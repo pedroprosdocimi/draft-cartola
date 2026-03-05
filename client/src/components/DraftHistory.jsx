@@ -108,6 +108,9 @@ function OptionsTooltip({ pick, accentColor, anchorRect }) {
                 <div className={`text-xs font-semibold truncate leading-tight ${isChosen ? 'text-white' : 'text-gray-400'}`}>
                   {o.nickname || `#${o.cartola_id}`}
                 </div>
+                {o.club_abbreviation && (
+                  <div className="text-gray-600 text-xs truncate">{o.club_abbreviation}</div>
+                )}
               </div>
               <div className="flex-shrink-0 text-right">
                 {o.average_score != null && (

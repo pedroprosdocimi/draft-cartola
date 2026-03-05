@@ -361,10 +361,10 @@ async function executePick(room, participant, player, io, options = null) {
     ? JSON.stringify(options.map(p => ({
         cartola_id: p.cartola_id,
         nickname: p.nickname,
-        photo_url: p.photo_url,
+        photo_url: p.photo || p.photo_url || null,
         average_score: p.average_score,
         price: p.price,
-        club_id: p.club_id,
+        club_abbreviation: p.club?.abbreviation || null,
       })))
     : null;
 
