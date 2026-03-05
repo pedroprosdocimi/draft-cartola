@@ -172,28 +172,57 @@ export default function PlayerCard({
           {player.photo
             ? <img src={player.photo} alt={player.nickname} className="w-full h-full object-cover object-top" />
             : <span className="absolute inset-0 flex items-center justify-center text-5xl text-gray-700">?</span>}
-          {/* Score badge over photo */}
-          <div className="absolute bottom-2 right-2 bg-black/70 rounded-lg px-1.5 py-0.5">
-            <AvgScore score={player.average_score} posAvg={posAvg} />
-          </div>
         </div>
 
         {/* Info */}
-        <div className="flex flex-col p-2 gap-1 flex-1">
-          {/* Name + pos */}
-          <div className="flex items-start gap-1.5">
-            <span className={`${posBg} text-white text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5`}>
-              {posLabel}
+        <div className="flex flex-col p-2 gap-1.5 flex-1">
+          {/* Name + pos + club — unified block */}
+          <div className="text-center flex flex-col gap-1">
+            <span className="font-extrabold text-white text-base leading-tight line-clamp-2">
+              {player.nickname}
             </span>
-            <span className="font-bold text-white text-sm leading-tight line-clamp-2">{player.nickname}</span>
+            <div className="flex items-center justify-center gap-1.5">
+              <span className={`${posBg} text-white text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0`}>
+                {posLabel}
+              </span>
+              <span className="text-xs text-gray-400 font-medium">{player.club?.abbreviation || ''}</span>
+            </div>
           </div>
 
-          {/* Club + match */}
-          <div className="text-xs text-gray-400 font-medium">{player.club?.abbreviation || ''}</div>
-          {match && <div className="text-xs text-blue-400 font-medium">{match}</div>}
+          {/* Divider + match */}
+          {match && (
+            <>
+              <div className="border-t border-gray-700" />
+              <div className="text-xs text-blue-400 font-medium text-center">{match}</div>
+            </>
+          )}
+
+          {/* Divider: média + últimas 4 pontuações */}
+          <div className="border-t border-gray-700 pt-1.5">
+            {/* Média */}
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-gray-500">Média</span>
+              <AvgScore score={player.average_score} posAvg={posAvg} />
+            </div>
+            {/* Últimas rodadas */}
+            {player.recentScores?.length > 0 && (
+              <div className="flex gap-1 justify-between">
+                {player.recentScores.slice(0, 4).map(({ round, score }) => {
+                  const s = score || 0;
+                  const color = s >= 5 ? 'text-green-400' : s >= 2 ? 'text-yellow-400' : 'text-red-400';
+                  return (
+                    <div key={round} className="flex-1 flex flex-col items-center bg-gray-900/60 rounded py-1 px-0.5">
+                      <span className="text-gray-600 text-xs leading-none mb-0.5">R{round}</span>
+                      <span className={`text-xs font-bold leading-none ${color}`}>{s.toFixed(1)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {/* Stats */}
-          <div className="border-t border-gray-700 mt-1 pt-1">
+          <div className="border-t border-gray-700 pt-1">
             <StatRows
               scouts={player.scouts}
               positionId={player.position_id}

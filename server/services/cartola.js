@@ -225,6 +225,23 @@ async function getPlayersAndClubs() {
     } catch { /* malformed JSON, skip */ }
   }
 
+  // Load last 4 rounds' scores per player
+  const recentScoreRows = (await pool.query(`
+    SELECT p.cartola_id, ps.round_number, ps.pontuacao
+    FROM player_scouts ps
+    JOIN players p ON p.id = ps.player_id
+    WHERE ps.round_number IN (
+      SELECT DISTINCT round_number FROM player_scouts ORDER BY round_number DESC LIMIT 4
+    )
+    ORDER BY ps.round_number DESC
+  `)).rows;
+
+  const recentScoresMap = {};
+  for (const row of recentScoreRows) {
+    if (!recentScoresMap[row.cartola_id]) recentScoresMap[row.cartola_id] = [];
+    recentScoresMap[row.cartola_id].push({ round: row.round_number, score: row.pontuacao });
+  }
+
   // Load players with latest round data
   const players = (await pool.query(`
     SELECT p.cartola_id, p.nickname, p.name, p.photo_url,
@@ -243,7 +260,8 @@ async function getPlayersAndClubs() {
     status_id: r.status_id,
     photo: r.photo_url,
     club: clubs[r.club_id] || null,
-    scouts: scoutMap[r.cartola_id] || null
+    scouts: scoutMap[r.cartola_id] || null,
+    recentScores: recentScoresMap[r.cartola_id] || [],
   }));
 
   if (players.length === 0) {
