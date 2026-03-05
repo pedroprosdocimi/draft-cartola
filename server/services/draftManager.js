@@ -340,10 +340,11 @@ async function pickPlayer(roomCode, participantId, cartolaId, io) {
   if (!player) return { error: 'Jogador não está entre as opções apresentadas.' };
 
   const participant = room.participants.get(participantId);
-  return executePick(room, participant, player, io);
+  const options = [...room.currentOptions];
+  return executePick(room, participant, player, io, options);
 }
 
-async function executePick(room, participant, player, io) {
+async function executePick(room, participant, player, io, options = null) {
   const storedPositionId = room.currentPickerPositionId || player.position_id;
 
   if (room.timer) { clearInterval(room.timer); room.timer = null; }
@@ -356,11 +357,22 @@ async function executePick(room, participant, player, io) {
 
   participant.picks.push({ ...player, position_id: storedPositionId, picked_at: new Date().toISOString() });
 
-  // Persist pick with position_id
+  const optionsJson = options
+    ? JSON.stringify(options.map(p => ({
+        cartola_id: p.cartola_id,
+        nickname: p.nickname,
+        photo_url: p.photo_url,
+        average_score: p.average_score,
+        price: p.price,
+        club_id: p.club_id,
+      })))
+    : null;
+
+  // Persist pick with position_id and options
   await pool.query(
-    `INSERT INTO draft_picks (session_id, participant_id, cartola_id, position_id, overall_pick, picked_at)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [room.code, participant.id, player.cartola_id, storedPositionId, pickNumber, new Date().toISOString()]
+    `INSERT INTO draft_picks (session_id, participant_id, cartola_id, position_id, overall_pick, picked_at, options_json)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [room.code, participant.id, player.cartola_id, storedPositionId, pickNumber, new Date().toISOString(), optionsJson]
   );
 
   room.currentPickIndex++;
@@ -422,9 +434,10 @@ async function autoPickForParticipant(room, participantId, io) {
   if (!participant) return;
 
   if (room.currentOptions && room.currentOptions.length > 0) {
-    const pick = room.currentOptions[Math.floor(Math.random() * room.currentOptions.length)];
+    const options = [...room.currentOptions];
+    const pick = options[Math.floor(Math.random() * options.length)];
     io.to(room.code).emit('auto_picked', { participantId, player: pick });
-    await executePick(room, participant, pick, io);
+    await executePick(room, participant, pick, io, options);
     return;
   }
 

@@ -134,6 +134,7 @@ router.get('/admin/drafts/:id', async (req, res) => {
         dp.cartola_id,
         dp.position_id,
         dp.picked_at,
+        dp.options_json,
         p.nickname,
         p.photo_url,
         latest.average_score,
@@ -154,10 +155,15 @@ router.get('/admin/drafts/:id', async (req, res) => {
       ORDER BY dp.overall_pick
     `, [id]);
 
+    const picks = picksRes.rows.map(r => ({
+      ...r,
+      options: r.options_json ? JSON.parse(r.options_json) : null,
+    }));
+
     res.json({
       session: sessionRes.rows[0],
       participants: participantsRes.rows,
-      picks: picksRes.rows,
+      picks,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

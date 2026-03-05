@@ -60,6 +60,11 @@ function PickCell({ pick, pickNum, accentColor }) {
   const isBench = BENCH_IDS.includes(pick.position_id);
   const posLabel = POS_LABEL[pick.position_id] || `P${pick.position_id}`;
 
+  // Options: all except the chosen player
+  const otherOptions = pick.options
+    ? pick.options.filter(o => o.cartola_id !== pick.cartola_id)
+    : [];
+
   return (
     <div className={`rounded-lg border p-2 ${POS_BG[pick.position_id] || 'bg-gray-800 border-gray-700/50'} ${isBench ? 'opacity-70' : ''}`}>
       {/* Top row: pick number + position badge + score */}
@@ -77,7 +82,7 @@ function PickCell({ pick, pickNum, accentColor }) {
         )}
       </div>
 
-      {/* Player row: photo + name */}
+      {/* Chosen player */}
       <div className="flex items-center gap-2">
         {pick.photo_url ? (
           <img
@@ -102,6 +107,26 @@ function PickCell({ pick, pickNum, accentColor }) {
           </div>
         </div>
       </div>
+
+      {/* Other options */}
+      {otherOptions.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-gray-700/40 space-y-1">
+          <div className="text-gray-600 text-xs uppercase tracking-wide mb-1">Outras opcoes</div>
+          {otherOptions.map(o => (
+            <div key={o.cartola_id} className="flex items-center gap-1.5 opacity-50 hover:opacity-80 transition-opacity">
+              {o.photo_url ? (
+                <img src={o.photo_url} className="w-5 h-5 rounded-full object-cover flex-shrink-0 ring-1 ring-gray-600" alt="" />
+              ) : (
+                <div className="w-5 h-5 rounded-full bg-gray-700 flex-shrink-0 ring-1 ring-gray-600" />
+              )}
+              <span className="text-gray-400 text-xs truncate flex-1">{o.nickname || `#${o.cartola_id}`}</span>
+              {o.average_score != null && (
+                <span className="text-gray-500 text-xs flex-shrink-0">{o.average_score.toFixed(1)}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
