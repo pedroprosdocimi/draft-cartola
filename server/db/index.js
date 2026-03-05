@@ -12,6 +12,19 @@ async function initDb() {
   const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
   await pool.query(schema);
 
+  // Migrations for existing databases
+  const migrations = [
+    `ALTER TABLE draft_sessions ADD COLUMN IF NOT EXISTS admin_id TEXT`,
+    `ALTER TABLE draft_sessions ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'lobby'`,
+    `ALTER TABLE draft_sessions ADD COLUMN IF NOT EXISTS draft_order TEXT`,
+    `ALTER TABLE draft_sessions ADD COLUMN IF NOT EXISTS current_pick_index INTEGER DEFAULT 0`,
+    `ALTER TABLE draft_sessions ADD COLUMN IF NOT EXISTS pick_number INTEGER DEFAULT 0`,
+    `ALTER TABLE draft_picks ADD COLUMN IF NOT EXISTS position_id INTEGER`,
+  ];
+  for (const m of migrations) {
+    try { await pool.query(m); } catch { /* column already exists */ }
+  }
+
   // Seed default users
   const hash = bcrypt.hashSync('123456', 10);
   const now = new Date().toISOString();

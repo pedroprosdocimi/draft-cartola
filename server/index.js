@@ -8,6 +8,7 @@ const apiRoutes = require('./routes/api');
 const authRoutes = require('./routes/auth');
 const registerHandlers = require('./socket/handlers');
 const { initDb } = require('./db');
+const { restoreRoomsFromDB } = require('./services/draftManager');
 
 const PORT = process.env.PORT || 3001;
 const isProd = process.env.NODE_ENV === 'production';
@@ -37,7 +38,8 @@ if (isProd) {
 
 registerHandlers(io);
 
-initDb().then(() => {
+initDb().then(async () => {
+  await restoreRoomsFromDB();
   httpServer.listen(PORT, () => {
     console.log(`Server running on port ${PORT} [${isProd ? 'production' : 'development'}]`);
   });

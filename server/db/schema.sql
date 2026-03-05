@@ -67,8 +67,13 @@ CREATE TABLE IF NOT EXISTS draft_eligible_override (
 
 CREATE TABLE IF NOT EXISTS draft_sessions (
   id TEXT PRIMARY KEY,
+  admin_id TEXT,
   created_at TEXT,
-  completed_at TEXT
+  completed_at TEXT,
+  status TEXT DEFAULT 'lobby',
+  draft_order TEXT,
+  current_pick_index INTEGER DEFAULT 0,
+  pick_number INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS draft_participants (
@@ -84,6 +89,7 @@ CREATE TABLE IF NOT EXISTS draft_picks (
   session_id TEXT,
   participant_id TEXT,
   cartola_id INTEGER,
+  position_id INTEGER,
   overall_pick INTEGER,
   picked_at TEXT
 );

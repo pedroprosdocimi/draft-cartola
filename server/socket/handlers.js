@@ -29,11 +29,11 @@ module.exports = function registerHandlers(io) {
       console.log(`[room] created: ${roomCode} by ${participantName}`);
     });
 
-    socket.on('join_room', ({ roomCode, participantName }) => {
+    socket.on('join_room', async ({ roomCode, participantName }) => {
       if (!roomCode?.trim() || !participantName?.trim()) {
         return socket.emit('error', { message: 'Código ou nome inválido.' });
       }
-      const result = joinRoom(roomCode.trim().toUpperCase(), participantName.trim(), socket.id);
+      const result = await joinRoom(roomCode.trim().toUpperCase(), participantName.trim(), socket.id);
       if (result.error) return socket.emit('error', { message: result.error });
 
       socket.join(roomCode.toUpperCase());
@@ -42,8 +42,8 @@ module.exports = function registerHandlers(io) {
       console.log(`[room] ${participantName} joined: ${roomCode}`);
     });
 
-    socket.on('set_formation', ({ roomCode, participantId, formation }) => {
-      const result = setFormation(roomCode, participantId, formation);
+    socket.on('set_formation', async ({ roomCode, participantId, formation }) => {
+      const result = await setFormation(roomCode, participantId, formation);
       if (result.error) return socket.emit('error', { message: result.error });
       io.to(roomCode).emit('room_state', getRoomState(roomCode));
     });
@@ -107,6 +107,12 @@ module.exports = function registerHandlers(io) {
 
       const state = getRoomState(roomCode);
       socket.emit('room_state', state);
+
+      // Restart timer if the room is in progress but has no running timer
+      // (happens when server restarts and first user reconnects)
+      if ((room.status === 'drafting' || room.status === 'bench_drafting') && !room.timer) {
+        startTimer(room, io);
+      }
 
       if (room.status === 'drafting') {
         socket.emit('draft_started', {
