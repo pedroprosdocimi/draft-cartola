@@ -9,18 +9,32 @@ import EndScreen from './pages/EndScreen.jsx';
 import Admin from './pages/Admin.jsx';
 import socket from './socket.js';
 
+function readSession() {
+  try { return JSON.parse(localStorage.getItem('draft_session')); } catch { return null; }
+}
+
+function saveSession(roomCode, participantId, isAdmin) {
+  if (roomCode && participantId) {
+    localStorage.setItem('draft_session', JSON.stringify({ roomCode, participantId, isAdmin }));
+  }
+}
+
+function clearSession() {
+  localStorage.removeItem('draft_session');
+}
+
 export default function App() {
   // Auth state
-  const [authPage, setAuthPage] = useState('login'); // 'login' | 'register'
+  const [authPage, setAuthPage] = useState('login');
   const [user, setUser] = useState(null);
-  const [authChecked, setAuthChecked] = useState(false);
 
-  // App state
+  // App state — initialized from localStorage so reconnect works on page refresh
   const [page, setPage] = useState('home');
-  const [roomCode, setRoomCode] = useState(null);
-  const [participantId, setParticipantId] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [roomCode, setRoomCode] = useState(() => readSession()?.roomCode || null);
+  const [participantId, setParticipantId] = useState(() => readSession()?.participantId || null);
+  const [isAdmin, setIsAdmin] = useState(() => readSession()?.isAdmin || false);
   const [draftData, setDraftData] = useState(null);
+  const [lobbyState, setLobbyState] = useState(null); // initial state for lobby reconnect
   const [teams, setTeams] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -28,10 +42,7 @@ export default function App() {
   // Validate stored token on startup
   useEffect(() => {
     const token = localStorage.getItem('draft_token');
-    if (!token) {
-      setAuthChecked(true);
-      return;
-    }
+    if (!token) return;
     fetch(`${API_URL}/api/auth/me`, {
       headers: { Authorization: `Bearer ${token}` }
     })
@@ -40,34 +51,38 @@ export default function App() {
         if (data.user) setUser(data.user);
         else localStorage.removeItem('draft_token');
       })
-      .catch(() => localStorage.removeItem('draft_token'))
-      .finally(() => setAuthChecked(false)); // false = don't show loading screen
+      .catch(() => localStorage.removeItem('draft_token'));
   }, []);
 
-  const handleLogin = (userData) => {
-    setUser(userData);
-    setPage('home');
-  };
+  // On socket connect (covers page refresh + network reconnect):
+  // if we have a stored session, re-emit reconnect_participant
+  useEffect(() => {
+    const tryReconnect = () => {
+      const session = readSession();
+      if (session?.roomCode && session?.participantId) {
+        socket.emit('reconnect_participant', {
+          roomCode: session.roomCode,
+          participantId: session.participantId
+        });
+      }
+    };
 
-  const handleLogout = () => {
-    localStorage.removeItem('draft_token');
-    setUser(null);
-    setAuthPage('login');
-    setPage('home');
-    setRoomCode(null);
-    setParticipantId(null);
-    setDraftData(null);
-    setTeams(null);
-  };
+    socket.on('connect', tryReconnect);
+    // If socket was already connected when this effect runs (page refresh), trigger now
+    if (socket.connected) tryReconnect();
+
+    return () => socket.off('connect', tryReconnect);
+  }, []);
 
   // Socket events
   useEffect(() => {
-    socket.on('room_joined', ({ roomCode, participantId, isAdmin }) => {
-      setRoomCode(roomCode);
-      setParticipantId(participantId);
-      setIsAdmin(isAdmin);
+    socket.on('room_joined', ({ roomCode: rc, participantId: pid, isAdmin: admin }) => {
+      setRoomCode(rc);
+      setParticipantId(pid);
+      setIsAdmin(admin);
       setPage('lobby');
       setLoading(false);
+      saveSession(rc, pid, admin);
     });
 
     socket.on('loading', ({ message }) => setLoading(message));
@@ -78,15 +93,23 @@ export default function App() {
       setLoading(false);
     });
 
-    socket.on('draft_complete', ({ teams }) => {
-      setTeams(teams);
+    socket.on('draft_complete', ({ teams: t }) => {
+      setTeams(t);
       setPage('end');
+      clearSession();
     });
 
     socket.on('error', ({ message }) => {
       setError(message);
       setLoading(false);
       setTimeout(() => setError(null), 4000);
+      // If room no longer exists (e.g. server restarted), clear stored session
+      if (message.includes('Sala não encontrada') || message.includes('Participante não encontrado')) {
+        clearSession();
+        setPage('home');
+        setRoomCode(null);
+        setParticipantId(null);
+      }
     });
 
     return () => {
@@ -97,6 +120,37 @@ export default function App() {
       socket.off('error');
     };
   }, []);
+
+  // Handle room_state for lobby reconnect navigation
+  useEffect(() => {
+    const onRoomState = (state) => {
+      if (state.status === 'lobby') {
+        setLobbyState(state);
+        setRoomCode(state.roomCode);
+        setIsAdmin(state.adminId === readSession()?.participantId);
+        setPage('lobby');
+      }
+    };
+    socket.on('room_state', onRoomState);
+    return () => socket.off('room_state', onRoomState);
+  }, []);
+
+  const handleLogin = (userData) => {
+    setUser(userData);
+    setPage('home');
+  };
+
+  const handleLogout = () => {
+    clearSession();
+    localStorage.removeItem('draft_token');
+    setUser(null);
+    setAuthPage('login');
+    setPage('home');
+    setRoomCode(null);
+    setParticipantId(null);
+    setDraftData(null);
+    setTeams(null);
+  };
 
   // Not logged in → show auth screens
   if (!user) {
@@ -118,7 +172,6 @@ export default function App() {
     );
   }
 
-  // Logged in → show app
   return (
     <div className="min-h-screen">
       {error && (
@@ -141,7 +194,12 @@ export default function App() {
       {page === 'admin' && <Admin onBack={() => setPage('home')} />}
 
       {page === 'lobby' && (
-        <Lobby roomCode={roomCode} participantId={participantId} isAdmin={isAdmin} />
+        <Lobby
+          roomCode={roomCode}
+          participantId={participantId}
+          isAdmin={isAdmin}
+          initialState={lobbyState}
+        />
       )}
 
       {page === 'draft' && draftData && (

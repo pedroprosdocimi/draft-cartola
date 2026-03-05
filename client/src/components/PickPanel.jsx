@@ -2,7 +2,14 @@ import React from 'react';
 import PlayerCard from './PlayerCard.jsx';
 import Timer from './Timer.jsx';
 
-const POSITION_LABELS = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA' };
+const POSITION_LABELS = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA', 21: 'DEF RES', 22: 'MEI RES', 23: 'ATA RES' };
+
+const BENCH_SLOTS = {
+  21: { label: 'DEF RES', sub: 'ZAG ou LAT', color: 'border-green-700 bg-green-900/50 text-green-300 hover:bg-green-800/70' },
+  22: { label: 'MEI RES', sub: 'Meia',       color: 'border-yellow-600 bg-yellow-900/50 text-yellow-300 hover:bg-yellow-800/70' },
+  23: { label: 'ATA RES', sub: 'Atacante',   color: 'border-red-600 bg-red-900/50 text-red-300 hover:bg-red-800/70' },
+};
+const BENCH_SLOT_IDS = [21, 22, 23];
 
 const POSITION_COLORS = {
   1: { border: 'border-blue-500',   bg: 'bg-blue-900/50',   text: 'text-blue-300',   btn: 'border-blue-500 bg-blue-900/60 hover:bg-blue-800/80' },
@@ -126,6 +133,9 @@ export default function PickPanel({
   myFormation,
   myPicks = [],
   timeLeft = 60,
+  phase = 'main',
+  benchNeededSlots = [],
+  onPickBenchSlot,
 }) {
   const posLabel = POSITION_LABELS[currentPickerPositionId] || '';
   const posBadgeColor = (POSITION_COLORS[currentPickerPositionId]?.btn || 'border-gray-600 bg-gray-600').split(' ')[0];
@@ -165,8 +175,43 @@ export default function PickPanel({
     );
   }
 
-  // ── Modal: formation picker (only when it's my turn) ─────────────────────
-  if (isMyTurn && myFormation) {
+  // ── Modal: bench slot picker ──────────────────────────────────────────────
+  if (isMyTurn && phase === 'bench' && !offeredPlayers) {
+    return (
+      <div className="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center gap-5 p-4 overflow-y-auto">
+        <Timer timeLeft={timeLeft} isMyTurn={isMyTurn} />
+        <div className="text-center">
+          <p className="text-cartola-gold font-bold text-xl sm:text-2xl tracking-wide">Escolha um Reserva</p>
+          <p className="text-gray-400 text-sm mt-1">Selecione o slot que deseja preencher</p>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-4">
+          {BENCH_SLOT_IDS.map(slotId => {
+            const slot = BENCH_SLOTS[slotId];
+            const filled = !benchNeededSlots.includes(slotId);
+            return (
+              <button
+                key={slotId}
+                onClick={() => !filled && onPickBenchSlot(slotId)}
+                disabled={filled}
+                className={`w-36 h-28 flex flex-col items-center justify-center rounded-2xl border-2 transition-all
+                  ${filled
+                    ? 'border-gray-700 bg-gray-800/40 opacity-40 cursor-default'
+                    : `${slot.color} hover:scale-105 active:scale-95 cursor-pointer`
+                  }`}
+              >
+                <span className="text-lg font-bold">{slot.label}</span>
+                <span className="text-xs mt-1 opacity-70">{slot.sub}</span>
+                {filled && <span className="text-xs mt-1 opacity-50">✓ preenchido</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Modal: formation picker (main draft, only when it's my turn) ──────────
+  if (isMyTurn && phase === 'main' && myFormation) {
     return (
       <div className="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center gap-4 sm:gap-6 p-4 overflow-y-auto">
         <Timer timeLeft={timeLeft} isMyTurn={isMyTurn} />

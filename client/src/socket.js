@@ -5,7 +5,7 @@ const socket = io(API_URL, {
   autoConnect: true,
   reconnection: true,
   reconnectionDelay: 1000,
-  reconnectionAttempts: 5
+  reconnectionAttempts: Infinity
 });
 
 export default socket;

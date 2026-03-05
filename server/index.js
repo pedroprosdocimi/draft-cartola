@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const path = require('path');
@@ -6,6 +7,7 @@ const cors = require('cors');
 const apiRoutes = require('./routes/api');
 const authRoutes = require('./routes/auth');
 const registerHandlers = require('./socket/handlers');
+const { initDb } = require('./db');
 
 const PORT = process.env.PORT || 3001;
 const isProd = process.env.NODE_ENV === 'production';
@@ -35,6 +37,11 @@ if (isProd) {
 
 registerHandlers(io);
 
-httpServer.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} [${isProd ? 'production' : 'development'}]`);
+initDb().then(() => {
+  httpServer.listen(PORT, () => {
+    console.log(`Server running on port ${PORT} [${isProd ? 'production' : 'development'}]`);
+  });
+}).catch(err => {
+  console.error('[db] Falha ao inicializar:', err);
+  process.exit(1);
 });

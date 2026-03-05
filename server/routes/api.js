@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getPlayersAndClubs, syncFromAPI } = require('../services/cartola');
-const db = require('../db');
+const { pool } = require('../db');
 
 // Sync all data from Cartola API into local DB.
 // Call this once per week (e.g.: curl -X POST http://localhost:3001/api/sync)
@@ -16,17 +16,17 @@ router.post('/sync', async (req, res) => {
 });
 
 // Check what's in the local DB without hitting the API
-router.get('/sync/status', (req, res) => {
+router.get('/sync/status', async (req, res) => {
   try {
-    const latestRound = db.prepare('SELECT id, round_number FROM rounds ORDER BY id DESC LIMIT 1').get();
+    const latestRound = (await pool.query('SELECT id, round_number FROM rounds ORDER BY id DESC LIMIT 1')).rows[0];
     const rawMatchCount = latestRound
-      ? db.prepare('SELECT COUNT(*) as cnt FROM matches WHERE round_id = ?').get(latestRound.id).cnt
+      ? (await pool.query('SELECT COUNT(*) as cnt FROM matches WHERE round_id = $1', [latestRound.id])).rows[0].cnt
       : 0;
-    const rawMatchCountAll = db.prepare('SELECT COUNT(*) as cnt FROM matches').get().cnt;
-    const matchesByRound = db.prepare('SELECT round_id, COUNT(*) as cnt FROM matches GROUP BY round_id').all();
-    const allRounds = db.prepare('SELECT id, round_number FROM rounds ORDER BY id').all();
+    const rawMatchCountAll = (await pool.query('SELECT COUNT(*) as cnt FROM matches')).rows[0].cnt;
+    const matchesByRound = (await pool.query('SELECT round_id, COUNT(*) as cnt FROM matches GROUP BY round_id')).rows;
+    const allRounds = (await pool.query('SELECT id, round_number FROM rounds ORDER BY id')).rows;
 
-    const { players, clubMatches } = getPlayersAndClubs();
+    const { players, clubMatches } = await getPlayersAndClubs();
     const matches = Object.values(clubMatches).filter((v, i, a) => a.indexOf(v) === i);
     res.json({
       ok: true,
@@ -48,9 +48,9 @@ router.get('/sync/status', (req, res) => {
   }
 });
 
-router.get('/players', (req, res) => {
+router.get('/players', async (req, res) => {
   try {
-    const { players, clubs, clubMatches } = getPlayersAndClubs();
+    const { players, clubs, clubMatches } = await getPlayersAndClubs();
     res.json({ players, clubs, clubMatches });
   } catch (err) {
     res.status(503).json({ error: err.message });
@@ -58,26 +58,40 @@ router.get('/players', (req, res) => {
 });
 
 // GET /api/admin/eligible — list manually added player IDs
-router.get('/admin/eligible', (req, res) => {
-  const rows = db.prepare('SELECT cartola_id FROM draft_eligible_override').all();
-  res.json({ eligible: rows.map(r => r.cartola_id) });
+router.get('/admin/eligible', async (req, res) => {
+  try {
+    const rows = (await pool.query('SELECT cartola_id FROM draft_eligible_override')).rows;
+    res.json({ eligible: rows.map(r => r.cartola_id) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST /api/admin/eligible/:cartolaId — add player to draft pool
-router.post('/admin/eligible/:cartolaId', (req, res) => {
+router.post('/admin/eligible/:cartolaId', async (req, res) => {
   const cartolaId = parseInt(req.params.cartolaId);
   if (isNaN(cartolaId)) return res.status(400).json({ error: 'cartolaId inválido.' });
-  db.prepare('INSERT OR IGNORE INTO draft_eligible_override (cartola_id, added_at) VALUES (?, ?)')
-    .run(cartolaId, new Date().toISOString());
-  res.json({ ok: true });
+  try {
+    await pool.query(
+      'INSERT INTO draft_eligible_override (cartola_id, added_at) VALUES ($1, $2) ON CONFLICT (cartola_id) DO NOTHING',
+      [cartolaId, new Date().toISOString()]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // DELETE /api/admin/eligible/:cartolaId — remove player from draft pool
-router.delete('/admin/eligible/:cartolaId', (req, res) => {
+router.delete('/admin/eligible/:cartolaId', async (req, res) => {
   const cartolaId = parseInt(req.params.cartolaId);
   if (isNaN(cartolaId)) return res.status(400).json({ error: 'cartolaId inválido.' });
-  db.prepare('DELETE FROM draft_eligible_override WHERE cartola_id = ?').run(cartolaId);
-  res.json({ ok: true });
+  try {
+    await pool.query('DELETE FROM draft_eligible_override WHERE cartola_id = $1', [cartolaId]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.get('/health', (req, res) => {

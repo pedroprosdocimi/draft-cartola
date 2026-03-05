@@ -11,9 +11,12 @@ const FORMATION_DETAILS = {
   '3-4-3': { GOL: 1, LAT: 0, ZAG: 3, MEI: 4, ATA: 3 }
 };
 
-export default function Lobby({ roomCode, participantId, isAdmin }) {
-  const [roomState, setRoomState] = useState(null);
-  const [selectedFormation, setSelectedFormation] = useState(null);
+export default function Lobby({ roomCode, participantId, isAdmin, initialState }) {
+  const [roomState, setRoomState] = useState(initialState || null);
+  const [selectedFormation, setSelectedFormation] = useState(() => {
+    const me = initialState?.participants?.find(p => p.id === participantId);
+    return me?.formation || null;
+  });
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {

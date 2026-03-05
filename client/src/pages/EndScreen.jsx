@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 
-const POS_LABEL = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA' };
+const POS_LABEL = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA', 21: 'DEF RES', 22: 'MEI RES', 23: 'ATA RES' };
 const POS_COLORS = {
   1: 'text-yellow-400', 2: 'text-blue-400', 3: 'text-red-400',
   4: 'text-purple-400', 5: 'text-green-400',
+  21: 'text-teal-400', 22: 'text-amber-400', 23: 'text-orange-400',
 };
-const POS_ORDER = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4 };
+const POS_ORDER = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 21: 5, 22: 6, 23: 7 };
+const BENCH_SLOT_IDS = [21, 22, 23];
 
 export default function EndScreen({ teams, participantId }) {
   const [activeTab, setActiveTab] = useState(participantId);
@@ -16,10 +18,13 @@ export default function EndScreen({ teams, participantId }) {
   const sortedTeams = [...teams].sort((a, b) => (a.pickOrder || 0) - (b.pickOrder || 0));
 
   const totalScore = (picks) =>
-    picks.filter(p => p.position_id !== 6).reduce((sum, p) => sum + (p.average_score || 0), 0);
+    picks.filter(p => !BENCH_SLOT_IDS.includes(p.position_id)).reduce((sum, p) => sum + (p.average_score || 0), 0);
 
-  const sortedPicks = (picks) =>
-    picks.filter(p => p.position_id !== 6).sort((a, b) => (POS_ORDER[a.position_id] ?? 9) - (POS_ORDER[b.position_id] ?? 9));
+  const mainPicks = (picks) =>
+    picks.filter(p => !BENCH_SLOT_IDS.includes(p.position_id)).sort((a, b) => (POS_ORDER[a.position_id] ?? 9) - (POS_ORDER[b.position_id] ?? 9));
+
+  const benchPicks = (picks) =>
+    picks.filter(p => BENCH_SLOT_IDS.includes(p.position_id)).sort((a, b) => (POS_ORDER[a.position_id] ?? 9) - (POS_ORDER[b.position_id] ?? 9));
 
   return (
     <div className="min-h-screen p-4 max-w-6xl mx-auto">
@@ -83,7 +88,7 @@ export default function EndScreen({ teams, participantId }) {
                 </tr>
               </thead>
               <tbody>
-                {sortedPicks(team.picks).map((p, i) => (
+                {mainPicks(team.picks).map((p, i) => (
                   <tr key={p.cartola_id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
                     <td className="py-2 px-3 text-gray-600">{i + 1}</td>
                     <td className="py-2 px-3">
@@ -93,23 +98,39 @@ export default function EndScreen({ teams, participantId }) {
                     </td>
                     <td className="py-2 px-3">
                       <div className="flex items-center gap-2">
-                        {p.photo && (
-                          <img src={p.photo} className="w-7 h-7 rounded-full object-cover" alt="" />
-                        )}
+                        {p.photo && <img src={p.photo} className="w-7 h-7 rounded-full object-cover" alt="" />}
                         <span className="font-medium text-white">{p.nickname}</span>
                       </div>
                     </td>
-                    <td className="py-2 px-3 text-gray-400">
-                      {p.club?.abbreviation || `Clube ${p.club_id}`}
-                    </td>
-                    <td className="py-2 px-3 text-right font-semibold text-cartola-gold">
-                      {(p.average_score || 0).toFixed(1)}
-                    </td>
-                    <td className="py-2 px-3 text-right text-gray-500">
-                      C${(p.price || 0).toFixed(1)}
-                    </td>
+                    <td className="py-2 px-3 text-gray-400">{p.club?.abbreviation || `Clube ${p.club_id}`}</td>
+                    <td className="py-2 px-3 text-right font-semibold text-cartola-gold">{(p.average_score || 0).toFixed(1)}</td>
+                    <td className="py-2 px-3 text-right text-gray-500">C${(p.price || 0).toFixed(1)}</td>
                   </tr>
                 ))}
+                {benchPicks(team.picks).length > 0 && (
+                  <>
+                    <tr><td colSpan={6} className="py-2 px-3 text-xs font-semibold text-gray-600 uppercase tracking-wide border-t border-gray-800">Reservas</td></tr>
+                    {benchPicks(team.picks).map((p, i) => (
+                      <tr key={`bench-${p.cartola_id}`} className="border-b border-gray-800/30 hover:bg-gray-800/20 opacity-80">
+                        <td className="py-2 px-3 text-gray-700">{i + 1}</td>
+                        <td className="py-2 px-3">
+                          <span className={`font-bold text-xs ${POS_COLORS[p.position_id]}`}>
+                            {POS_LABEL[p.position_id]}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            {p.photo && <img src={p.photo} className="w-7 h-7 rounded-full object-cover" alt="" />}
+                            <span className="font-medium text-gray-300">{p.nickname}</span>
+                          </div>
+                        </td>
+                        <td className="py-2 px-3 text-gray-500">{p.club?.abbreviation || `Clube ${p.club_id}`}</td>
+                        <td className="py-2 px-3 text-right font-semibold text-gray-400">{(p.average_score || 0).toFixed(1)}</td>
+                        <td className="py-2 px-3 text-right text-gray-600">C${(p.price || 0).toFixed(1)}</td>
+                      </tr>
+                    ))}
+                  </>
+                )}
               </tbody>
             </table>
           </div>

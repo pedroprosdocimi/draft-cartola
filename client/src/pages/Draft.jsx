@@ -13,7 +13,8 @@ const FORMATIONS_CLIENT = {
   '3-4-3': { 1: 1, 2: 0, 3: 3, 4: 4, 5: 3 }
 };
 
-const POSITION_LABELS = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA' };
+const POSITION_LABELS = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA', 21: 'DEF RES', 22: 'MEI RES', 23: 'ATA RES' };
+const BENCH_SLOT_IDS = [21, 22, 23];
 
 export default function Draft({ roomCode, participantId, initialData }) {
   const [mobileTab, setMobileTab] = useState('status'); // 'order' | 'status' | 'team'
@@ -64,12 +65,21 @@ export default function Draft({ roomCode, participantId, initialData }) {
   const [draftOrder] = useState(initialData.draftOrder || []);
   const [participants, setParticipants] = useState(initialData.participants || []);
   const [currentPickerId, setCurrentPickerId] = useState(initialData.currentPickerId);
-  const [pickedIds, setPickedIds] = useState(new Set());
+  const [pickedIds, setPickedIds] = useState(() => {
+    const ids = new Set();
+    for (const p of initialData.participants || []) {
+      for (const pick of p.picks || []) ids.add(pick.cartola_id);
+    }
+    return ids;
+  });
   const [myPicks, setMyPicks] = useState([]);
   const [timeLeft, setTimeLeft] = useState(60);
-  const [pickNumber, setPickNumber] = useState(0);
+  const [pickNumber, setPickNumber] = useState(() =>
+    (initialData.participants || []).reduce((sum, p) => sum + (p.picks || []).length, 0)
+  );
   const [lastPick, setLastPick] = useState(null);
   const [notification, setNotification] = useState(null);
+  const [phase, setPhase] = useState(initialData.phase || 'main'); // 'main' | 'bench'
   const [offeredPlayers, setOfferedPlayers] = useState(
     initialData.currentOptions
       ? initialData.currentOptions.map(p => ({ ...p, club: initialData.clubs?.[p.club_id] || null }))
@@ -93,12 +103,13 @@ export default function Draft({ roomCode, participantId, initialData }) {
     if (me?.picks) setMyPicks(me.picks);
   }, [participants, participantId]);
 
-  // Compute positions I still need based on my formation + picks so far
+  // Compute positions I still need based on my formation + picks so far (main draft)
   const myNeededPositions = useMemo(() => {
     if (!me?.formation) return [];
     const formationMap = FORMATIONS_CLIENT[me.formation] || {};
+    const mainPicks = myPicks.filter(p => !BENCH_SLOT_IDS.includes(p.position_id));
     const counts = {};
-    for (const p of myPicks) {
+    for (const p of mainPicks) {
       counts[p.position_id] = (counts[p.position_id] || 0) + 1;
     }
     return Object.entries(formationMap)
@@ -108,6 +119,12 @@ export default function Draft({ roomCode, participantId, initialData }) {
       }))
       .filter(({ remaining }) => remaining > 0);
   }, [me, myPicks]);
+
+  // Bench slots I still need to fill
+  const myBenchNeededSlots = useMemo(() => {
+    const filledSlots = new Set(myPicks.filter(p => BENCH_SLOT_IDS.includes(p.position_id)).map(p => p.position_id));
+    return BENCH_SLOT_IDS.filter(id => !filledSlots.has(id));
+  }, [myPicks]);
 
   const showNotification = useCallback((msg, type = 'info') => {
     setNotification({ msg, type });
@@ -166,7 +183,17 @@ export default function Draft({ roomCode, participantId, initialData }) {
     const onTimerTick = ({ timeLeft }) => setTimeLeft(timeLeft);
     const onError = ({ message }) => showNotification(`❌ ${message}`, 'error');
 
+    const onBenchDraftStarted = ({ currentPickerId }) => {
+      setPhase('bench');
+      setCurrentPickerId(currentPickerId);
+      setOfferedPlayers(null);
+      setCurrentPickerPositionId(null);
+      setTimeLeft(60);
+      showNotification('🏃 Segunda fase: Draft de Reservas!', 'info');
+    };
+
     socket.on('draft_started', onDraftStarted);
+    socket.on('bench_draft_started', onBenchDraftStarted);
     socket.on('position_picked', onPositionPicked);
     socket.on('player_picked', onPlayerPicked);
     socket.on('auto_picked', onAutoPicked);
@@ -175,6 +202,7 @@ export default function Draft({ roomCode, participantId, initialData }) {
 
     return () => {
       socket.off('draft_started', onDraftStarted);
+      socket.off('bench_draft_started', onBenchDraftStarted);
       socket.off('position_picked', onPositionPicked);
       socket.off('player_picked', onPlayerPicked);
       socket.off('auto_picked', onAutoPicked);
@@ -192,6 +220,10 @@ export default function Draft({ roomCode, participantId, initialData }) {
     socket.emit('pick_position', { roomCode, participantId, positionId });
   }, [roomCode, participantId]);
 
+  const handlePickBenchSlot = useCallback((benchSlotId) => {
+    socket.emit('pick_bench_slot', { roomCode, participantId, benchSlotId });
+  }, [roomCode, participantId]);
+
   const handlePickPlayer = useCallback((cartolaId) => {
     socket.emit('pick_player', { roomCode, participantId, cartolaId });
   }, [roomCode, participantId]);
@@ -202,12 +234,14 @@ export default function Draft({ roomCode, participantId, initialData }) {
   if (isMyTurn) {
     turnText = offeredPlayers
       ? <p className="text-cartola-gold font-semibold">Escolha um dos jogadores!</p>
-      : <p className="text-cartola-gold font-semibold">Escolha uma posição!</p>;
+      : phase === 'bench'
+        ? <p className="text-cartola-gold font-semibold">Escolha um slot de reserva!</p>
+        : <p className="text-cartola-gold font-semibold">Escolha uma posição!</p>;
   } else {
     turnText = (
       <p className="text-gray-400 text-sm">
         Aguardando <strong className="text-white">{currentPickerName}</strong>
-        {offeredPlayers ? ' escolher um jogador...' : ' escolher uma posição...'}
+        {offeredPlayers ? ' escolher um jogador...' : phase === 'bench' ? ' escolher um reserva...' : ' escolher uma posição...'}
       </p>
     );
   }
@@ -230,6 +264,11 @@ export default function Draft({ roomCode, participantId, initialData }) {
         <div className="flex items-center gap-2">
           <span className="font-bold text-white">⚽ Draft</span>
           <span className="text-xs text-gray-500 font-mono">{roomCode}</span>
+          {phase === 'bench' && (
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-900/50 text-blue-300 border border-blue-700">
+              Reservas
+            </span>
+          )}
         </div>
         <div className="text-sm font-semibold">
           {isMyTurn
@@ -247,6 +286,7 @@ export default function Draft({ roomCode, participantId, initialData }) {
         neededPositions={myNeededPositions}
         onPickPosition={handlePickPosition}
         onPickPlayer={handlePickPlayer}
+        onPickBenchSlot={handlePickBenchSlot}
         currentPickerName={currentPickerName}
         clubMatches={clubMatches}
         positionAverages={positionAverages}
@@ -254,6 +294,8 @@ export default function Draft({ roomCode, participantId, initialData }) {
         myFormation={me?.formation}
         myPicks={myPicks}
         timeLeft={timeLeft}
+        phase={phase}
+        benchNeededSlots={myBenchNeededSlots}
       />
 
       {/* Main layout — 3 columns on desktop, tabs on mobile */}

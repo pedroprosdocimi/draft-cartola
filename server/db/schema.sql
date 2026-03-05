@@ -1,22 +1,22 @@
 CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   nome TEXT NOT NULL,
   telefone TEXT NOT NULL,
   username TEXT UNIQUE NOT NULL,
   nome_time TEXT NOT NULL,
   senha_hash TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  is_admin INTEGER NOT NULL DEFAULT 0
+  is_admin BOOLEAN NOT NULL DEFAULT false
 );
 
 CREATE TABLE IF NOT EXISTS rounds (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   round_number INTEGER,
   fetched_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS players (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   cartola_id INTEGER UNIQUE,
   nickname TEXT,
   name TEXT,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS players (
 );
 
 CREATE TABLE IF NOT EXISTS player_round_data (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   player_id INTEGER REFERENCES players(id),
   round_id INTEGER REFERENCES rounds(id),
   position_id INTEGER,
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS clubs (
 );
 
 CREATE TABLE IF NOT EXISTS matches (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   round_id INTEGER REFERENCES rounds(id),
   home_club_id INTEGER,
   away_club_id INTEGER,
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS matches (
 );
 
 CREATE TABLE IF NOT EXISTS player_scouts (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   player_id INTEGER REFERENCES players(id),
   round_number INTEGER NOT NULL,
   scout_data TEXT NOT NULL DEFAULT '{}',
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS draft_participants (
 );
 
 CREATE TABLE IF NOT EXISTS draft_picks (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   session_id TEXT,
   participant_id TEXT,
   cartola_id INTEGER,
