@@ -160,7 +160,7 @@ export default function PlayerCard({
       <button
         onClick={isMyTurn ? onClick : undefined}
         disabled={!isMyTurn}
-        className={`w-44 flex-shrink-0 flex flex-col bg-gray-800 border rounded-xl overflow-hidden transition-all text-center snap-start
+        className={`w-44 flex-shrink-0 flex flex-col bg-gray-800 border rounded-xl overflow-hidden transition-all text-left snap-start
           ${isMyTurn
             ? `border-gray-600 hover:border-cartola-green hover:scale-105 hover:shadow-lg ${POSITION_GLOW[player.position_id]} cursor-pointer active:scale-100`
             : 'border-gray-700 opacity-80 cursor-default'
@@ -181,9 +181,12 @@ export default function PlayerCard({
             <span className="font-extrabold text-white text-base leading-tight line-clamp-2">
               {player.nickname}
             </span>
-            <span className={`${posBg} text-white text-xs font-bold px-1.5 py-0.5 rounded`}>
-              {posLabel}
-            </span>
+            <div className="flex items-center justify-center gap-1.5">
+              <span className={`${posBg} text-white text-xs font-bold px-1.5 py-0.5 rounded`}>
+                {posLabel}
+              </span>
+              <AvgScore score={player.average_score} posAvg={posAvg} />
+            </div>
           </div>
 
           {/* Divider + match */}
