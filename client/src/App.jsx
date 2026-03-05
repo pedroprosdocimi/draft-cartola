@@ -23,6 +23,12 @@ function clearSession() {
   localStorage.removeItem('draft_session');
 }
 
+// Read room code from URL (e.g. /ABC123)
+function getRoomCodeFromUrl() {
+  const match = window.location.pathname.match(/^\/([A-Z0-9]{6})$/i);
+  return match ? match[1].toUpperCase() : null;
+}
+
 export default function App() {
   // Auth state
   const [authPage, setAuthPage] = useState('login');
@@ -38,6 +44,45 @@ export default function App() {
   const [teams, setTeams] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // On load: if URL has a room code, store it for Home to use
+  useEffect(() => {
+    const urlCode = getRoomCodeFromUrl();
+    if (!urlCode) return;
+    const session = readSession();
+    // If no active session for this room, save as invite for Home to pre-fill
+    if (!session || session.roomCode !== urlCode) {
+      sessionStorage.setItem('draft_invite_code', urlCode);
+    }
+    // Always clean the URL — navigation is handled by state
+    window.history.replaceState(null, '', '/');
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync URL with current room state
+  useEffect(() => {
+    const inRoom = roomCode && ['lobby', 'draft', 'end'].includes(page);
+    const target = inRoom ? `/${roomCode}` : '/';
+    if (window.location.pathname !== target) {
+      window.history.replaceState(null, '', target);
+    }
+  }, [page, roomCode]);
+
+  // Browser back button: if user navigates away from room URL → go home
+  useEffect(() => {
+    const onPopState = () => {
+      const urlCode = getRoomCodeFromUrl();
+      if (!urlCode) {
+        clearSession();
+        setPage('home');
+        setRoomCode(null);
+        setParticipantId(null);
+        setDraftData(null);
+        setTeams(null);
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   // Validate stored token on startup
   useEffect(() => {
@@ -121,14 +166,17 @@ export default function App() {
     };
   }, []);
 
-  // Handle room_state for lobby reconnect navigation
+  // Handle room_state for reconnect navigation
   useEffect(() => {
     const onRoomState = (state) => {
+      setRoomCode(state.roomCode);
+      setIsAdmin(state.adminId === readSession()?.participantId);
       if (state.status === 'lobby') {
         setLobbyState(state);
-        setRoomCode(state.roomCode);
-        setIsAdmin(state.adminId === readSession()?.participantId);
         setPage('lobby');
+      } else if (state.status === 'drafting' || state.status === 'bench_drafting') {
+        setDraftData(state);
+        setPage('draft');
       }
     };
     socket.on('room_state', onRoomState);
@@ -189,7 +237,22 @@ export default function App() {
         </div>
       )}
 
-      {page === 'home' && <Home user={user} onLogout={handleLogout} onGoAdmin={() => setPage('admin')} />}
+      {page === 'home' && (
+        <Home
+          user={user}
+          onLogout={handleLogout}
+          onGoAdmin={() => setPage('admin')}
+          onRejoin={() => {
+            const session = readSession();
+            if (session?.roomCode && session?.participantId) {
+              socket.emit('reconnect_participant', {
+                roomCode: session.roomCode,
+                participantId: session.participantId,
+              });
+            }
+          }}
+        />
+      )}
 
       {page === 'admin' && <Admin onBack={() => setPage('home')} />}
 

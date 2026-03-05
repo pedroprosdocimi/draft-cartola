@@ -1,9 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import socket from '../socket.js';
 
-export default function Home({ user, onLogout, onGoAdmin }) {
+function readSession() {
+  try { return JSON.parse(localStorage.getItem('draft_session')); } catch { return null; }
+}
+
+export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
   const [roomCode, setRoomCode] = useState('');
   const [tab, setTab] = useState('create'); // 'create' | 'join' — only admin sees tabs
+
+  const activeSession = readSession();
+
+  // Auto-fill invite code from URL (e.g. /ABC123)
+  useEffect(() => {
+    const invite = sessionStorage.getItem('draft_invite_code');
+    if (invite) {
+      sessionStorage.removeItem('draft_invite_code');
+      setRoomCode(invite);
+      setTab('join');
+    }
+  }, []);
 
   const handleCreate = () => {
     socket.emit('create_room', { participantName: user.nomeTime });
@@ -39,6 +55,26 @@ export default function Home({ user, onLogout, onGoAdmin }) {
             </button>
           </div>
         </div>
+
+        {/* Active draft banner */}
+        {activeSession?.roomCode && (
+          <div className="mb-4 rounded-xl border border-cartola-green/50 bg-cartola-green/10 p-4 flex items-center gap-4">
+            <div className="relative flex-shrink-0">
+              <div className="w-3 h-3 rounded-full bg-cartola-green" />
+              <div className="absolute inset-0 w-3 h-3 rounded-full bg-cartola-green animate-ping" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-white font-semibold text-sm">Draft em andamento</p>
+              <p className="text-gray-400 text-xs font-mono mt-0.5">{activeSession.roomCode}</p>
+            </div>
+            <button
+              onClick={onRejoin}
+              className="flex-shrink-0 btn-primary text-sm py-1.5 px-4"
+            >
+              Voltar
+            </button>
+          </div>
+        )}
 
         {/* Card */}
         <div className="card">
