@@ -132,7 +132,7 @@ export default function PickPanel({
   scoutPositionAverages = {},
   myFormation,
   myPicks = [],
-  timeLeft = 5,
+  timeLeft = 15,
   phase = 'main',
   benchNeededSlots = [],
   onPickBenchSlot,

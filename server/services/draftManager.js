@@ -578,7 +578,7 @@ async function autoPickForParticipant(room, participantId, io) {
 
 function startTimer(room, io) {
   if (room.timer) clearInterval(room.timer);
-  let timeLeft = 5;
+  let timeLeft = 15;
 
   room.timer = setInterval(() => {
     timeLeft--;

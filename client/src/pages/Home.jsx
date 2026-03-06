@@ -17,6 +17,8 @@ export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
   const [roomCode, setRoomCode] = useState('');
   const [tab, setTab] = useState('create'); // 'create' | 'join' — only admin sees tabs
   const [activeDrafts, setActiveDrafts] = useState([]);
+  const [historyDrafts, setHistoryDrafts] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   const activeSession = readSession();
 
@@ -28,6 +30,12 @@ export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
     })
       .then(r => r.json())
       .then(data => { if (data.drafts) setActiveDrafts(data.drafts); })
+      .catch(() => {});
+    fetch(`${API_URL}/api/drafts/history`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(data => { if (data.drafts) setHistoryDrafts(data.drafts); })
       .catch(() => {});
   }, []);
 
@@ -209,6 +217,37 @@ export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
             >
               ⚙️ Painel Admin
             </button>
+          </div>
+        )}
+
+        {/* Draft history */}
+        {historyDrafts.length > 0 && (
+          <div className="mt-6">
+            <button
+              onClick={() => setShowHistory(h => !h)}
+              className="w-full flex items-center justify-between text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 hover:text-gray-300 transition-colors"
+            >
+              <span>Histórico de drafts ({historyDrafts.length})</span>
+              <span>{showHistory ? '▲' : '▼'}</span>
+            </button>
+
+            {showHistory && (
+              <div className="space-y-2">
+                {historyDrafts.map(draft => (
+                  <div key={draft.room_code} className="rounded-xl border border-gray-800 bg-gray-900/60 px-4 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono font-bold text-gray-300 text-sm">{draft.room_code}</span>
+                      <span className="text-xs text-gray-600">
+                        {draft.completed_at
+                          ? new Date(draft.completed_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+                          : '—'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 mt-0.5 truncate">{draft.participants_names}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

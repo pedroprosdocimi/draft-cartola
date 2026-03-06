@@ -84,7 +84,6 @@ export default function EndScreen({ teams, participantId }) {
                   <th className="text-left py-2 px-3 text-gray-500 font-medium">Jogador</th>
                   <th className="text-left py-2 px-3 text-gray-500 font-medium">Clube</th>
                   <th className="text-right py-2 px-3 text-gray-500 font-medium">Média</th>
-                  <th className="text-right py-2 px-3 text-gray-500 font-medium">Preço</th>
                 </tr>
               </thead>
               <tbody>
@@ -107,12 +106,11 @@ export default function EndScreen({ teams, participantId }) {
                     </td>
                     <td className="py-2 px-3 text-gray-400">{p.club?.abbreviation || `Clube ${p.club_id}`}</td>
                     <td className="py-2 px-3 text-right font-semibold text-cartola-gold">{(p.average_score || 0).toFixed(1)}</td>
-                    <td className="py-2 px-3 text-right text-gray-500">C${(p.price || 0).toFixed(1)}</td>
                   </tr>
                 ))}
                 {benchPicks(team.picks).length > 0 && (
                   <>
-                    <tr><td colSpan={6} className="py-2 px-3 text-xs font-semibold text-gray-600 uppercase tracking-wide border-t border-gray-800">Reservas</td></tr>
+                    <tr><td colSpan={5} className="py-2 px-3 text-xs font-semibold text-gray-600 uppercase tracking-wide border-t border-gray-800">Reservas</td></tr>
                     {benchPicks(team.picks).map((p, i) => (
                       <tr key={`bench-${p.cartola_id}`} className="border-b border-gray-800/30 hover:bg-gray-800/20 opacity-80">
                         <td className="py-2 px-3 text-gray-700">{i + 1}</td>
@@ -129,7 +127,6 @@ export default function EndScreen({ teams, participantId }) {
                         </td>
                         <td className="py-2 px-3 text-gray-500">{p.club?.abbreviation || `Clube ${p.club_id}`}</td>
                         <td className="py-2 px-3 text-right font-semibold text-gray-400">{(p.average_score || 0).toFixed(1)}</td>
-                        <td className="py-2 px-3 text-right text-gray-600">C${(p.price || 0).toFixed(1)}</td>
                       </tr>
                     ))}
                   </>

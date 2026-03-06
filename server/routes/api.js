@@ -88,6 +88,39 @@ router.get('/drafts/active', async (req, res) => {
   res.json({ drafts: rows });
 });
 
+// GET /api/drafts/history — completed drafts the current user participated in
+router.get('/drafts/history', async (req, res) => {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) return res.status(401).json({ error: 'Não autorizado.' });
+
+  const jwt = require('jsonwebtoken');
+  const JWT_SECRET = 'draft-cartola-secret-key-2024';
+  let user;
+  try {
+    const payload = jwt.verify(header.slice(7), JWT_SECRET);
+    user = (await pool.query('SELECT * FROM users WHERE id = $1', [payload.id])).rows[0];
+    if (!user) return res.status(401).json({ error: 'Usuário não encontrado.' });
+  } catch {
+    return res.status(401).json({ error: 'Token inválido.' });
+  }
+
+  const nomeTime = user.nome_time;
+  const rows = (await pool.query(
+    `SELECT ds.id AS room_code, ds.status, ds.created_at, ds.completed_at,
+            dp.id AS participant_id, dp.captain_cartola_id,
+            (SELECT COUNT(*) FROM draft_participants WHERE session_id = ds.id) AS participant_count,
+            (SELECT STRING_AGG(name, ', ' ORDER BY pick_order) FROM draft_participants WHERE session_id = ds.id) AS participants_names
+     FROM draft_sessions ds
+     JOIN draft_participants dp ON dp.session_id = ds.id AND dp.name = $1
+     WHERE ds.status = 'complete'
+     ORDER BY ds.completed_at DESC
+     LIMIT 20`,
+    [nomeTime]
+  )).rows;
+
+  res.json({ drafts: rows });
+});
+
 // GET /api/admin/eligible — list manually added player IDs
 router.get('/admin/eligible', async (req, res) => {
   try {

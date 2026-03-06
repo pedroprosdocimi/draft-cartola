@@ -214,11 +214,8 @@ export default function PlayerCard({
 
         {/* Info */}
         <div className="flex flex-col p-2 gap-1.5 flex-1">
-          {/* Name + pos — same line */}
-          <div className="flex items-center justify-center gap-1.5 flex-wrap">
-            <span className={`${posBg} text-white text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0`}>
-              {posLabel}
-            </span>
+          {/* Name */}
+          <div className="flex items-center justify-center">
             <span className="font-extrabold text-white text-base leading-tight line-clamp-2 text-center">
               {player.nickname}
             </span>

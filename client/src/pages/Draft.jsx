@@ -73,7 +73,7 @@ export default function Draft({ roomCode, participantId, initialData }) {
     return ids;
   });
   const [myPicks, setMyPicks] = useState([]);
-  const [timeLeft, setTimeLeft] = useState(5);
+  const [timeLeft, setTimeLeft] = useState(15);
   const [pickNumber, setPickNumber] = useState(() =>
     (initialData.participants || []).reduce((sum, p) => sum + (p.picks || []).length, 0)
   );
@@ -171,7 +171,7 @@ export default function Draft({ roomCode, participantId, initialData }) {
       setPickedIds(prev => new Set([...prev, player.cartola_id]));
       setCurrentPickerId(nextParticipantId);
       setPickNumber(pickNumber);
-      setTimeLeft(5);
+      setTimeLeft(15);
       setLastPick({ participantId: pid, player });
       setParticipants(prev => prev.map(p =>
         p.id === pid ? { ...p, picks: [...(p.picks || []), player] } : p
@@ -195,7 +195,7 @@ export default function Draft({ roomCode, participantId, initialData }) {
       setCurrentPickerId(currentPickerId);
       setOfferedPlayers(null);
       setCurrentPickerPositionId(null);
-      setTimeLeft(5);
+      setTimeLeft(15);
       showNotification('🏃 Segunda fase: Draft de Reservas!', 'info');
     };
 
@@ -207,7 +207,7 @@ export default function Draft({ roomCode, participantId, initialData }) {
         club: clubs[p.club_id] || clubs[String(p.club_id)] || null,
       })));
       setCurrentPickerPositionId(null);
-      setTimeLeft(5);
+      setTimeLeft(15);
       showNotification('👑 Terceira fase: Escolha do Capitão!', 'info');
     };
 
@@ -222,7 +222,7 @@ export default function Draft({ roomCode, participantId, initialData }) {
           ...p,
           club: clubs[p.club_id] || clubs[String(p.club_id)] || null,
         })));
-        setTimeLeft(5);
+        setTimeLeft(15);
       } else {
         setOfferedPlayers(null);
       }
