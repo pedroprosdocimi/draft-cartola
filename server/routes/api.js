@@ -121,6 +121,85 @@ router.get('/drafts/history', async (req, res) => {
   res.json({ drafts: rows });
 });
 
+// GET /api/drafts/history/:roomCode — full detail of a completed draft with current round scores
+router.get('/drafts/history/:roomCode', async (req, res) => {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) return res.status(401).json({ error: 'Não autorizado.' });
+
+  const jwt = require('jsonwebtoken');
+  const JWT_SECRET = 'draft-cartola-secret-key-2024';
+  try {
+    jwt.verify(header.slice(7), JWT_SECRET);
+  } catch {
+    return res.status(401).json({ error: 'Token inválido.' });
+  }
+
+  const { roomCode } = req.params;
+
+  const session = (await pool.query(
+    'SELECT * FROM draft_sessions WHERE id = $1',
+    [roomCode]
+  )).rows[0];
+  if (!session) return res.status(404).json({ error: 'Draft não encontrado.' });
+
+  const participants = (await pool.query(
+    'SELECT * FROM draft_participants WHERE session_id = $1 ORDER BY pick_order ASC NULLS LAST',
+    [roomCode]
+  )).rows;
+
+  const latestRound = (await pool.query(
+    `SELECT id, round_number FROM rounds
+     WHERE EXISTS (SELECT 1 FROM player_scouts ps WHERE ps.round_number = rounds.round_number AND ps.pontuacao IS NOT NULL)
+     ORDER BY id DESC LIMIT 1`
+  )).rows[0];
+
+  const picks = (await pool.query(`
+    SELECT dp.participant_id, dp.cartola_id, dp.position_id AS slot_pos, dp.overall_pick,
+           p.nickname, p.photo_url,
+           prd.position_id AS real_pos, prd.club_id, prd.average_score, prd.status_id,
+           c.abbreviation AS club_abbreviation,
+           ps.pontuacao AS round_score
+    FROM draft_picks dp
+    JOIN players p ON p.cartola_id = dp.cartola_id
+    LEFT JOIN player_round_data prd ON prd.player_id = p.id
+      AND prd.round_id = (SELECT id FROM rounds ORDER BY id DESC LIMIT 1)
+    LEFT JOIN clubs c ON c.id = prd.club_id
+    LEFT JOIN player_scouts ps ON ps.player_id = p.id
+      AND ps.round_number = $2
+    WHERE dp.session_id = $1
+    ORDER BY dp.overall_pick ASC
+  `, [roomCode, latestRound?.round_number || 0])).rows;
+
+  const teams = participants.map(p => ({
+    id: p.id,
+    name: p.name,
+    formation: p.formation,
+    pickOrder: p.pick_order,
+    captainId: p.captain_cartola_id || null,
+    picks: picks
+      .filter(pick => pick.participant_id === p.id)
+      .map(pick => ({
+        cartola_id: pick.cartola_id,
+        nickname: pick.nickname,
+        photo: pick.photo_url,
+        position_id: pick.slot_pos ?? pick.real_pos,
+        club_id: pick.club_id,
+        average_score: pick.average_score,
+        round_score: pick.round_score ?? null,
+        status_id: pick.status_id,
+        club: pick.club_id ? { abbreviation: pick.club_abbreviation } : null,
+      }))
+  }));
+
+  res.json({
+    roomCode,
+    status: session.status,
+    completedAt: session.completed_at,
+    roundNumber: latestRound?.round_number || null,
+    teams,
+  });
+});
+
 // GET /api/admin/eligible — list manually added player IDs
 router.get('/admin/eligible', async (req, res) => {
   try {

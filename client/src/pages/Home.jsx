@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import socket from '../socket.js';
 import { API_URL } from '../config.js';
+import DraftDetail from '../components/DraftDetail.jsx';
 
 function readSession() {
   try { return JSON.parse(localStorage.getItem('draft_session')); } catch { return null; }
@@ -19,6 +20,7 @@ export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
   const [activeDrafts, setActiveDrafts] = useState([]);
   const [historyDrafts, setHistoryDrafts] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [detailRoomCode, setDetailRoomCode] = useState(null);
 
   const activeSession = readSession();
 
@@ -64,6 +66,9 @@ export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4">
+      {detailRoomCode && (
+        <DraftDetail roomCode={detailRoomCode} onClose={() => setDetailRoomCode(null)} />
+      )}
       <div className="w-full max-w-md">
 
         {/* Header */}
@@ -234,7 +239,11 @@ export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
             {showHistory && (
               <div className="space-y-2">
                 {historyDrafts.map(draft => (
-                  <div key={draft.room_code} className="rounded-xl border border-gray-800 bg-gray-900/60 px-4 py-3">
+                  <button
+                    key={draft.room_code}
+                    onClick={() => setDetailRoomCode(draft.room_code)}
+                    className="w-full rounded-xl border border-gray-800 bg-gray-900/60 px-4 py-3 text-left hover:border-gray-600 hover:bg-gray-800/60 transition-all"
+                  >
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-mono font-bold text-gray-300 text-sm">{draft.room_code}</span>
                       <span className="text-xs text-gray-600">
@@ -244,7 +253,7 @@ export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
                       </span>
                     </div>
                     <p className="text-xs text-gray-600 mt-0.5 truncate">{draft.participants_names}</p>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
