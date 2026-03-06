@@ -10,6 +10,9 @@ const POS_COLORS = {
 const BENCH_SLOT_IDS = [21, 22, 23];
 const POS_ORDER = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 21: 5, 22: 6, 23: 7 };
 
+// Which bench slot can substitute which starter positions
+const BENCH_TO_POSITIONS = { 21: [2, 3], 22: [4], 23: [5] };
+
 function scoreColor(score) {
   if (score == null) return 'text-gray-600';
   if (score >= 7) return 'text-green-400';
@@ -18,13 +21,44 @@ function scoreColor(score) {
   return 'text-red-400';
 }
 
+// Returns substitution maps:
+// subMap: starterCartolaId -> benchPlayer (bench came in for this starter)
+// usedBenchIds: Set of bench cartolaIds that were subbed in
+function buildSubstitutions(picks) {
+  const mainPicks = picks.filter(p => !BENCH_SLOT_IDS.includes(p.position_id));
+  const benchPicks = picks.filter(p => BENCH_SLOT_IDS.includes(p.position_id))
+    .sort((a, b) => (POS_ORDER[a.position_id] ?? 9) - (POS_ORDER[b.position_id] ?? 9));
+
+  const subMap = new Map();   // starterCartolaId -> benchPlayer
+  const usedBenchIds = new Set();
+
+  for (const bench of benchPicks) {
+    if (!bench.round_score || bench.round_score === 0) continue; // bench didn't play
+    const allowed = BENCH_TO_POSITIONS[bench.position_id] || [];
+    const target = mainPicks.find(p =>
+      allowed.includes(p.position_id) &&
+      (!p.round_score || p.round_score === 0) &&
+      !subMap.has(p.cartola_id)
+    );
+    if (target) {
+      subMap.set(target.cartola_id, bench);
+      usedBenchIds.add(bench.cartola_id);
+    }
+  }
+
+  return { subMap, usedBenchIds };
+}
+
 function teamRoundScore(picks, captainId) {
-  return picks
-    .filter(p => !BENCH_SLOT_IDS.includes(p.position_id))
-    .reduce((sum, p) => {
-      const score = p.round_score || 0;
-      return sum + (p.cartola_id === captainId ? score * 2 : score);
-    }, 0);
+  const mainPicks = picks.filter(p => !BENCH_SLOT_IDS.includes(p.position_id));
+  const { subMap } = buildSubstitutions(picks);
+
+  return mainPicks.reduce((sum, p) => {
+    const effective = subMap.has(p.cartola_id) ? subMap.get(p.cartola_id) : p;
+    const score = effective.round_score || 0;
+    const multiplier = p.cartola_id === captainId ? 2 : 1;
+    return sum + score * multiplier;
+  }, 0);
 }
 
 function teamAvgScore(picks) {
@@ -92,10 +126,17 @@ export default function DraftDetail({ roomCode, onClose }) {
 
   const sortedTeams = [...data.teams].sort((a, b) => (a.pickOrder || 0) - (b.pickOrder || 0));
   const activeTeam = data.teams.find(t => t.id === activeTab);
+
   const mainPicks = (activeTeam?.picks.filter(p => !BENCH_SLOT_IDS.includes(p.position_id)) || [])
     .sort((a, b) => (POS_ORDER[a.position_id] ?? 9) - (POS_ORDER[b.position_id] ?? 9));
   const benchPicks = (activeTeam?.picks.filter(p => BENCH_SLOT_IDS.includes(p.position_id)) || [])
     .sort((a, b) => (POS_ORDER[a.position_id] ?? 9) - (POS_ORDER[b.position_id] ?? 9));
+
+  const { subMap, usedBenchIds } = activeTeam
+    ? buildSubstitutions(activeTeam.picks)
+    : { subMap: new Map(), usedBenchIds: new Set() };
+
+  const cols = hasRoundScores ? 5 : 4;
 
   return (
     <div className="fixed inset-0 bg-black/85 z-50 overflow-y-auto p-4">
@@ -189,54 +230,21 @@ export default function DraftDetail({ roomCode, onClose }) {
                 </tr>
               </thead>
               <tbody>
-                {mainPicks.map(p => (
-                  <tr key={p.cartola_id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                    <td className="py-2 px-2">
-                      <span className={`font-bold text-xs ${POS_COLORS[p.position_id]}`}>
-                        {POS_LABEL[p.position_id]}
-                      </span>
-                    </td>
-                    <td className="py-2 px-2">
-                      <div className="flex items-center gap-2">
-                        {p.photo && <img src={p.photo} className="w-6 h-6 rounded-full object-cover flex-shrink-0" alt="" />}
-                        <span className="font-medium text-white">{p.nickname}</span>
-                        {p.cartola_id === activeTeam.captainId && (
-                          <span className="bg-yellow-400 text-black text-[10px] font-black px-1.5 py-0.5 rounded leading-none flex-shrink-0">C</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-2 px-2 text-gray-400 text-xs">{p.club?.abbreviation || '—'}</td>
-                    <td className="py-2 px-2 text-right text-gray-400 text-xs">{(p.average_score || 0).toFixed(1)}</td>
-                    {hasRoundScores && (() => {
-                      const isCaptain = p.cartola_id === activeTeam.captainId;
-                      const displayScore = p.round_score != null
-                        ? (isCaptain ? p.round_score * 2 : p.round_score)
-                        : null;
-                      return (
-                        <td className={`py-2 px-2 text-right font-bold ${scoreColor(displayScore)}`}>
-                          {displayScore != null ? (
-                            <span>
-                              {displayScore.toFixed(2)}
-                              {isCaptain && p.round_score != null && (
-                                <span className="text-yellow-400 text-[10px] ml-1">×2</span>
-                              )}
-                            </span>
-                          ) : '—'}
-                        </td>
-                      );
-                    })()}
-                  </tr>
-                ))}
+                {mainPicks.map(p => {
+                  const isCaptain = p.cartola_id === activeTeam.captainId;
+                  const subIn = subMap.get(p.cartola_id); // bench player that replaced this starter
+                  const wasSubbedOut = !!subIn;
 
-                {benchPicks.length > 0 && (
-                  <>
-                    <tr>
-                      <td colSpan={hasRoundScores ? 5 : 4} className="py-2 px-2 text-xs font-semibold text-gray-600 uppercase tracking-wide border-t border-gray-800">
-                        Reservas
-                      </td>
-                    </tr>
-                    {benchPicks.map(p => (
-                      <tr key={p.cartola_id} className="border-b border-gray-800/30 opacity-70">
+                  // Effective score for this slot
+                  const slotScore = wasSubbedOut ? (subIn.round_score || 0) : (p.round_score || 0);
+                  const displayScore = p.round_score != null || wasSubbedOut
+                    ? (isCaptain ? slotScore * 2 : slotScore)
+                    : null;
+
+                  return (
+                    <React.Fragment key={p.cartola_id}>
+                      {/* Starter row */}
+                      <tr className={`border-b border-gray-800/50 ${wasSubbedOut ? 'opacity-40' : 'hover:bg-gray-800/30'}`}>
                         <td className="py-2 px-2">
                           <span className={`font-bold text-xs ${POS_COLORS[p.position_id]}`}>
                             {POS_LABEL[p.position_id]}
@@ -245,18 +253,98 @@ export default function DraftDetail({ roomCode, onClose }) {
                         <td className="py-2 px-2">
                           <div className="flex items-center gap-2">
                             {p.photo && <img src={p.photo} className="w-6 h-6 rounded-full object-cover flex-shrink-0" alt="" />}
-                            <span className="text-gray-300">{p.nickname}</span>
+                            <span className={wasSubbedOut ? 'line-through text-gray-500' : 'font-medium text-white'}>
+                              {p.nickname}
+                            </span>
+                            {isCaptain && (
+                              <span className="bg-yellow-400 text-black text-[10px] font-black px-1.5 py-0.5 rounded leading-none flex-shrink-0">C</span>
+                            )}
+                            {wasSubbedOut && (
+                              <span className="text-[10px] text-red-400 font-medium flex-shrink-0">não jogou</span>
+                            )}
                           </div>
                         </td>
-                        <td className="py-2 px-2 text-gray-500 text-xs">{p.club?.abbreviation || '—'}</td>
-                        <td className="py-2 px-2 text-right text-gray-500 text-xs">{(p.average_score || 0).toFixed(1)}</td>
+                        <td className="py-2 px-2 text-gray-400 text-xs">{p.club?.abbreviation || '—'}</td>
+                        <td className="py-2 px-2 text-right text-gray-400 text-xs">{(p.average_score || 0).toFixed(1)}</td>
                         {hasRoundScores && (
-                          <td className={`py-2 px-2 text-right font-bold ${scoreColor(p.round_score)}`}>
-                            {p.round_score != null ? p.round_score.toFixed(2) : '—'}
+                          <td className="py-2 px-2 text-right font-bold text-gray-600">
+                            {wasSubbedOut ? '0.00' : p.round_score != null ? (
+                              <span className={scoreColor(p.round_score)}>
+                                {(isCaptain ? p.round_score * 2 : p.round_score).toFixed(2)}
+                                {isCaptain && <span className="text-yellow-400 text-[10px] ml-1">×2</span>}
+                              </span>
+                            ) : '—'}
                           </td>
                         )}
                       </tr>
-                    ))}
+
+                      {/* Sub-in row — bench player who replaced this starter */}
+                      {wasSubbedOut && (
+                        <tr className="border-b border-green-900/30 bg-green-950/20">
+                          <td className="py-1.5 px-2 pl-5">
+                            <span className={`font-bold text-xs ${POS_COLORS[subIn.position_id]}`}>
+                              {POS_LABEL[subIn.position_id]}
+                            </span>
+                          </td>
+                          <td className="py-1.5 px-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-green-400 text-xs font-bold flex-shrink-0">↑</span>
+                              {subIn.photo && <img src={subIn.photo} className="w-5 h-5 rounded-full object-cover flex-shrink-0" alt="" />}
+                              <span className="text-green-300 font-medium text-xs">{subIn.nickname}</span>
+                            </div>
+                          </td>
+                          <td className="py-1.5 px-2 text-gray-500 text-xs">{subIn.club?.abbreviation || '—'}</td>
+                          <td className="py-1.5 px-2 text-right text-gray-500 text-xs">{(subIn.average_score || 0).toFixed(1)}</td>
+                          {hasRoundScores && (
+                            <td className={`py-1.5 px-2 text-right font-bold ${scoreColor(displayScore)}`}>
+                              {displayScore != null ? (
+                                <span>
+                                  {displayScore.toFixed(2)}
+                                  {isCaptain && <span className="text-yellow-400 text-[10px] ml-1">×2</span>}
+                                </span>
+                              ) : '—'}
+                            </td>
+                          )}
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+
+                {/* Bench section */}
+                {benchPicks.length > 0 && (
+                  <>
+                    <tr>
+                      <td colSpan={cols} className="py-2 px-2 text-xs font-semibold text-gray-600 uppercase tracking-wide border-t border-gray-800">
+                        Reservas
+                      </td>
+                    </tr>
+                    {benchPicks.map(p => {
+                      const subbed = usedBenchIds.has(p.cartola_id);
+                      return (
+                        <tr key={p.cartola_id} className={`border-b border-gray-800/30 ${subbed ? 'opacity-40' : 'opacity-60'}`}>
+                          <td className="py-2 px-2">
+                            <span className={`font-bold text-xs ${POS_COLORS[p.position_id]}`}>
+                              {POS_LABEL[p.position_id]}
+                            </span>
+                          </td>
+                          <td className="py-2 px-2">
+                            <div className="flex items-center gap-2">
+                              {p.photo && <img src={p.photo} className="w-6 h-6 rounded-full object-cover flex-shrink-0" alt="" />}
+                              <span className="text-gray-300 text-xs">{p.nickname}</span>
+                              {subbed && <span className="text-[10px] text-gray-600 italic">entrou</span>}
+                            </div>
+                          </td>
+                          <td className="py-2 px-2 text-gray-500 text-xs">{p.club?.abbreviation || '—'}</td>
+                          <td className="py-2 px-2 text-right text-gray-500 text-xs">{(p.average_score || 0).toFixed(1)}</td>
+                          {hasRoundScores && (
+                            <td className={`py-2 px-2 text-right font-bold ${scoreColor(p.round_score)}`}>
+                              {p.round_score != null ? p.round_score.toFixed(2) : '—'}
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
                   </>
                 )}
               </tbody>

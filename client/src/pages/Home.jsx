@@ -110,6 +110,12 @@ export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
                     <p className="text-xs text-gray-500 mt-0.5">{draft.participant_count} participante{draft.participant_count !== '1' ? 's' : ''}</p>
                   </div>
                   <button
+                    onClick={() => setDetailRoomCode(draft.room_code)}
+                    className="flex-shrink-0 text-xs text-gray-500 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    Pontuação
+                  </button>
+                  <button
                     onClick={() => handleRejoinDraft(draft.room_code, draft.participant_id)}
                     className="flex-shrink-0 btn-primary text-sm py-1.5 px-4"
                   >
