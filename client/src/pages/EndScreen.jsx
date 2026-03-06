@@ -100,6 +100,9 @@ export default function EndScreen({ teams, participantId }) {
                       <div className="flex items-center gap-2">
                         {p.photo && <img src={p.photo} className="w-7 h-7 rounded-full object-cover" alt="" />}
                         <span className="font-medium text-white">{p.nickname}</span>
+                        {p.cartola_id === team.captainId && (
+                          <span className="bg-yellow-400 text-black text-[10px] font-black px-1.5 py-0.5 rounded leading-none flex-shrink-0">C</span>
+                        )}
                       </div>
                     </td>
                     <td className="py-2 px-3 text-gray-400">{p.club?.abbreviation || `Clube ${p.club_id}`}</td>
