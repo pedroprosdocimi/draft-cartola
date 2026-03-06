@@ -11,7 +11,7 @@ const FORMATION_DETAILS = {
   '3-4-3': { GOL: 1, LAT: 0, ZAG: 3, MEI: 4, ATA: 3 }
 };
 
-export default function Lobby({ roomCode, participantId, isAdmin, initialState }) {
+export default function Lobby({ roomCode, participantId, isAdmin, initialState, onLeave }) {
   const [roomState, setRoomState] = useState(initialState || null);
   const [selectedFormation, setSelectedFormation] = useState(() => {
     const me = initialState?.participants?.find(p => p.id === participantId);
@@ -38,6 +38,11 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState }
     socket.emit('start_draft', { roomCode, participantId });
   };
 
+  const handleLeave = () => {
+    socket.emit('leave_room', { roomCode, participantId });
+    socket.once('left_room', () => onLeave?.());
+  };
+
   const copyCode = () => {
     navigator.clipboard.writeText(roomCode);
     setCopied(true);
@@ -53,7 +58,13 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState }
 
   return (
     <div className="min-h-screen p-4 max-w-4xl mx-auto">
-      <div className="text-center mb-8 pt-6">
+      <div className="text-center mb-8 pt-6 relative">
+        <button
+          onClick={handleLeave}
+          className="absolute left-0 top-6 text-sm text-gray-500 hover:text-red-400 transition-colors px-2 py-1 rounded"
+        >
+          ← Sair
+        </button>
         <h1 className="text-3xl font-bold mb-2">⚽ Draft Cartola</h1>
         <div className="flex items-center justify-center gap-3">
           <span className="text-gray-400">Código da sala:</span>

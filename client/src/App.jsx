@@ -166,7 +166,7 @@ export default function App() {
       if (state.status === 'lobby') {
         setLobbyState(state);
         setPage('lobby');
-      } else if (state.status === 'drafting' || state.status === 'bench_drafting') {
+      } else if (state.status === 'drafting' || state.status === 'bench_drafting' || state.status === 'captain_drafting') {
         setDraftData(state);
         setPage('draft');
       }
@@ -254,6 +254,14 @@ export default function App() {
           participantId={participantId}
           isAdmin={isAdmin}
           initialState={lobbyState}
+          onLeave={() => {
+            clearSession();
+            setPage('home');
+            setRoomCode(null);
+            setParticipantId(null);
+            setLobbyState(null);
+            window.history.replaceState(null, '', '/');
+          }}
         />
       )}
 

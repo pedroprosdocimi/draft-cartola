@@ -121,6 +121,7 @@ export default function PlayerCard({
   match = null,
   positionAverages = {},
   scoutPositionAverages = {},
+  isCaptain = false,
 }) {
   const posAvg = positionAverages[player.position_id] ?? null;
   const scoutPositionAvgs = scoutPositionAverages[player.position_id] ?? null;
@@ -176,6 +177,11 @@ export default function PlayerCard({
           {player.photo
             ? <img src={player.photo} alt={player.nickname} className="w-full h-full object-cover object-top" />
             : <span className="absolute inset-0 flex items-center justify-center text-5xl text-gray-700">?</span>}
+          {isCaptain && (
+            <div className="absolute top-2 right-2 z-20 w-6 h-6 bg-black rounded-full flex items-center justify-center border-2 border-gray-300 shadow-lg">
+              <span className="text-white text-xs font-black leading-none">C</span>
+            </div>
+          )}
         </div>
 
         {/* Info */}

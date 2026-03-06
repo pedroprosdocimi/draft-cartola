@@ -1,8 +1,8 @@
 import React from 'react';
 
 export default function Timer({ timeLeft, isMyTurn }) {
-  const pct = (timeLeft / 60) * 100;
-  const urgent = timeLeft <= 10;
+  const pct = (timeLeft / 5) * 100;
+  const urgent = timeLeft <= 2;
 
   return (
     <div className={`w-full max-w-sm text-center px-8 py-6 rounded-2xl border ${

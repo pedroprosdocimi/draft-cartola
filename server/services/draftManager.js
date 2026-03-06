@@ -220,6 +220,99 @@ async function startDraft(roomCode, players, clubs, clubMatches) {
   return { ok: true };
 }
 
+// ── captain draft ─────────────────────────────────────────────────────────────
+
+function getStarterOptions(participant) {
+  const starters = participant.picks.filter(p => !BENCH_SLOT_IDS.includes(p.position_id));
+  const shuffled = [...starters].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 5);
+}
+
+async function startCaptainDraft(room, io) {
+  const participantIds = [...room.participants.keys()].sort(
+    (a, b) => (room.participants.get(a).pickOrder || 0) - (room.participants.get(b).pickOrder || 0)
+  );
+
+  room.draftOrder = participantIds;
+  room.currentPickIndex = 0;
+  room.status = 'captain_drafting';
+
+  await pool.query(
+    `UPDATE draft_sessions SET status = 'captain_drafting', draft_order = $1, current_pick_index = 0 WHERE id = $2`,
+    [JSON.stringify(room.draftOrder), room.code]
+  );
+
+  const firstPickerId = room.draftOrder[0];
+  const options = getStarterOptions(room.participants.get(firstPickerId));
+  room.currentOptions = options;
+  room.currentPickerPositionId = null;
+
+  io.to(room.code).emit('captain_draft_started', { currentPickerId: firstPickerId, options });
+  startTimer(room, io);
+  console.log(`[draft] captain phase started in room ${room.code}`);
+}
+
+async function executeCaptainPick(room, participantId, cartolaId, io) {
+  if (room.timer) { clearInterval(room.timer); room.timer = null; }
+  room.currentOptions = null;
+  room.currentPickerPositionId = null;
+
+  const participant = room.participants.get(participantId);
+  participant.captainId = cartolaId;
+
+  await pool.query(
+    `UPDATE draft_participants SET captain_cartola_id = $1 WHERE id = $2`,
+    [cartolaId, participantId]
+  );
+
+  room.currentPickIndex++;
+  await pool.query(
+    `UPDATE draft_sessions SET current_pick_index = $1 WHERE id = $2`,
+    [room.currentPickIndex, room.code]
+  );
+
+  const nextPickerId = getCurrentPicker(room);
+
+  if (!nextPickerId) {
+    room.status = 'complete';
+    await pool.query(
+      `UPDATE draft_sessions SET completed_at = $1, status = 'complete' WHERE id = $2`,
+      [new Date().toISOString(), room.code]
+    );
+    io.to(room.code).emit('captain_picked', { participantId, captainId: cartolaId });
+    io.to(room.code).emit('draft_complete', { teams: buildTeams(room) });
+    return { ok: true };
+  }
+
+  const nextOptions = getStarterOptions(room.participants.get(nextPickerId));
+  room.currentOptions = nextOptions;
+
+  io.to(room.code).emit('captain_picked', {
+    participantId,
+    captainId: cartolaId,
+    nextPickerId,
+    nextOptions,
+  });
+
+  startTimer(room, io);
+  return { ok: true };
+}
+
+async function pickCaptain(roomCode, participantId, cartolaId, io) {
+  const room = rooms.get(roomCode);
+  if (!room) return { error: 'Sala não encontrada.' };
+  if (room.status !== 'captain_drafting') return { error: 'Fase de capitão não está em andamento.' };
+
+  const currentPicker = getCurrentPicker(room);
+  if (currentPicker !== participantId) return { error: 'Não é sua vez.' };
+  if (!room.currentOptions) return { error: 'Sem opções disponíveis.' };
+
+  const player = room.currentOptions.find(p => p.cartola_id === cartolaId);
+  if (!player) return { error: 'Jogador não está entre as opções.' };
+
+  return executeCaptainPick(room, participantId, cartolaId, io);
+}
+
 // ── bench draft start ─────────────────────────────────────────────────────────
 
 async function startBenchDraft(room, io) {
@@ -388,12 +481,7 @@ async function executePick(room, participant, player, io, options = null) {
 
   if (!nextPickerId) {
     if (room.status === 'bench_drafting') {
-      room.status = 'complete';
-      await pool.query(
-        `UPDATE draft_sessions SET completed_at = $1, status = 'complete' WHERE id = $2`,
-        [new Date().toISOString(), room.code]
-      );
-      io.to(room.code).emit('draft_complete', { teams: buildTeams(room) });
+      await startCaptainDraft(room, io);
     } else {
       await startBenchDraft(room, io);
     }
@@ -432,6 +520,15 @@ function advancePastDone(room) {
 async function autoPickForParticipant(room, participantId, io) {
   const participant = room.participants.get(participantId);
   if (!participant) return;
+
+  if (room.status === 'captain_drafting') {
+    const options = room.currentOptions || [];
+    if (!options.length) return;
+    const pick = options[Math.floor(Math.random() * options.length)];
+    io.to(room.code).emit('auto_picked', { participantId, player: pick });
+    await executeCaptainPick(room, participantId, pick.cartola_id, io);
+    return;
+  }
 
   if (room.currentOptions && room.currentOptions.length > 0) {
     const options = [...room.currentOptions];
@@ -481,7 +578,7 @@ async function autoPickForParticipant(room, participantId, io) {
 
 function startTimer(room, io) {
   if (room.timer) clearInterval(room.timer);
-  let timeLeft = 60;
+  let timeLeft = 5;
 
   room.timer = setInterval(() => {
     timeLeft--;
@@ -506,7 +603,8 @@ function buildTeams(room) {
     name: p.name,
     formation: p.formation,
     pickOrder: p.pickOrder,
-    picks: p.picks
+    picks: p.picks,
+    captainId: p.captainId || null,
   }));
 }
 
@@ -518,7 +616,7 @@ async function restoreRoomsFromDB() {
   const sessions = (await pool.query(
     `SELECT * FROM draft_sessions
      WHERE completed_at IS NULL
-       AND status IN ('drafting', 'bench_drafting')`
+       AND status IN ('drafting', 'bench_drafting', 'captain_drafting')`
   )).rows;
 
   if (sessions.length === 0) return;
@@ -589,7 +687,8 @@ async function restoreRoomsFromDB() {
         socketId: null,
         formation: p.formation,
         picks: picksByParticipant[p.id] || [],
-        pickOrder: p.pick_order
+        pickOrder: p.pick_order,
+        captainId: p.captain_cartola_id || null,
       });
     }
 
@@ -612,7 +711,7 @@ async function restoreRoomsFromDB() {
       participants: participantsMap,
       players: draftPlayers,
       allPlayers,
-      benchPlayers: session.status === 'bench_drafting' && allPlayers
+      benchPlayers: (session.status === 'bench_drafting' || session.status === 'captain_drafting') && allPlayers
         ? allPlayers.filter(p => p.status_id !== 5 && !pickedIds.has(p.cartola_id))
         : null,
       clubs,
@@ -639,17 +738,20 @@ function getRoomState(roomCode) {
   const room = rooms.get(roomCode);
   if (!room) return null;
 
+  const phaseMap = { bench_drafting: 'bench', captain_drafting: 'captain' };
+
   return {
     roomCode: room.code,
     status: room.status,
-    phase: room.status === 'bench_drafting' ? 'bench' : 'main',
+    phase: phaseMap[room.status] || 'main',
     adminId: room.adminId,
     participants: [...room.participants.values()].map(p => ({
       id: p.id,
       name: p.name,
       formation: p.formation,
       pickOrder: p.pickOrder,
-      picks: p.picks
+      picks: p.picks,
+      captainId: p.captainId || null,
     })),
     currentPickerId: getCurrentPicker(room),
     pickNumber: room.pickNumber,
@@ -664,6 +766,27 @@ function getRoomState(roomCode) {
 
 function getRoom(roomCode) {
   return rooms.get(roomCode);
+}
+
+function leaveRoom(roomCode, participantId) {
+  const room = rooms.get(roomCode);
+  if (!room) return { error: 'Sala não encontrada.' };
+  if (room.status !== 'lobby') return { error: 'Não é possível sair durante o draft.' };
+
+  room.participants.delete(participantId);
+
+  // If room is empty, delete it
+  if (room.participants.size === 0) {
+    rooms.delete(roomCode);
+    return { disbanded: true };
+  }
+
+  // If admin left, assign a new admin
+  if (room.adminId === participantId) {
+    room.adminId = room.participants.keys().next().value;
+  }
+
+  return { ok: true };
 }
 
 function removeParticipantSocket(socketId) {
@@ -695,9 +818,11 @@ module.exports = {
   pickPosition,
   pickBenchSlot,
   pickPlayer,
+  pickCaptain,
   getRoomState,
   getRoom,
   startTimer,
+  leaveRoom,
   removeParticipantSocket,
   findRoomBySocket,
   restoreRoomsFromDB,

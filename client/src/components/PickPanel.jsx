@@ -132,7 +132,7 @@ export default function PickPanel({
   scoutPositionAverages = {},
   myFormation,
   myPicks = [],
-  timeLeft = 60,
+  timeLeft = 5,
   phase = 'main',
   benchNeededSlots = [],
   onPickBenchSlot,
@@ -147,14 +147,24 @@ export default function PickPanel({
         <Timer timeLeft={timeLeft} isMyTurn={isMyTurn} />
         <div className="text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
-            <span className={`border ${posBadgeColor} text-white text-sm font-bold px-4 py-1.5 rounded-lg`}>
-              {posLabel}
-            </span>
+            {phase === 'captain' ? (
+              <span className="border border-yellow-500 text-yellow-300 text-sm font-bold px-4 py-1.5 rounded-lg bg-yellow-900/30">
+                👑 CAPITÃO
+              </span>
+            ) : (
+              <span className={`border ${posBadgeColor} text-white text-sm font-bold px-4 py-1.5 rounded-lg`}>
+                {posLabel}
+              </span>
+            )}
           </div>
           <p className="text-gray-300 text-sm">
-            {isMyTurn
-              ? <span className="text-cartola-gold font-semibold">Escolha um jogador</span>
-              : <><strong className="text-white">{currentPickerName}</strong> está escolhendo...</>}
+            {phase === 'captain'
+              ? isMyTurn
+                ? <span className="text-cartola-gold font-semibold">Escolha seu Capitão!</span>
+                : <><strong className="text-white">{currentPickerName}</strong> está escolhendo o capitão...</>
+              : isMyTurn
+                ? <span className="text-cartola-gold font-semibold">Escolha um jogador</span>
+                : <><strong className="text-white">{currentPickerName}</strong> está escolhendo...</>}
           </p>
         </div>
         {/* Mobile: horizontal scroll · Desktop: centered wrap */}

@@ -1,11 +1,13 @@
 const {
   createRoom,
   joinRoom,
+  leaveRoom,
   setFormation,
   startDraft,
   pickPosition,
   pickBenchSlot,
   pickPlayer,
+  pickCaptain,
   getRoomState,
   getRoom,
   startTimer,
@@ -40,6 +42,16 @@ module.exports = function registerHandlers(io) {
       socket.emit('room_joined', { roomCode: roomCode.toUpperCase(), participantId: result.participantId, isAdmin: false });
       io.to(roomCode.toUpperCase()).emit('room_state', getRoomState(roomCode.toUpperCase()));
       console.log(`[room] ${participantName} joined: ${roomCode}`);
+    });
+
+    socket.on('leave_room', ({ roomCode, participantId }) => {
+      const result = leaveRoom(roomCode, participantId);
+      if (result.error) return socket.emit('error', { message: result.error });
+      socket.leave(roomCode);
+      socket.emit('left_room');
+      if (!result.disbanded) {
+        io.to(roomCode).emit('room_state', getRoomState(roomCode));
+      }
     });
 
     socket.on('set_formation', async ({ roomCode, participantId, formation }) => {
@@ -93,6 +105,12 @@ module.exports = function registerHandlers(io) {
     // Step 2 (both phases): pick one of the 5 offered players
     socket.on('pick_player', async ({ roomCode, participantId, cartolaId }) => {
       const result = await pickPlayer(roomCode, participantId, cartolaId, io);
+      if (result.error) return socket.emit('error', { message: result.error });
+    });
+
+    // Captain phase: pick captain from own starters
+    socket.on('pick_captain', async ({ roomCode, participantId, cartolaId }) => {
+      const result = await pickCaptain(roomCode, participantId, cartolaId, io);
       if (result.error) return socket.emit('error', { message: result.error });
     });
 

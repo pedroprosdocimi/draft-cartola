@@ -23,7 +23,7 @@ const POS_LABEL = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA', 21: 'DEF R
 
 const BENCH_SLOT_IDS = [21, 22, 23];
 
-export default function TeamSlots({ formation, picks }) {
+export default function TeamSlots({ formation, picks, captainId }) {
   if (!formation) return <div className="card text-gray-500 text-sm text-center py-8">Sem formação</div>;
 
   const counts = FORMATION_COUNTS[formation];
@@ -62,7 +62,12 @@ export default function TeamSlots({ formation, picks }) {
         <span className={`text-sm truncate ${empty ? 'text-gray-600' : 'text-white'}`}>
           {empty ? 'vazio' : p?.nickname}
         </span>
-        {!empty && <span className="text-xs text-gray-500 ml-auto flex-shrink-0">{p?.club?.abbreviation || ''}</span>}
+        {!empty && captainId && p?.cartola_id === captainId && (
+          <span className="w-4 h-4 bg-black rounded-full text-white text-[9px] font-black flex items-center justify-center border border-gray-400 ml-auto flex-shrink-0">C</span>
+        )}
+        {!empty && !(captainId && p?.cartola_id === captainId) && (
+          <span className="text-xs text-gray-500 ml-auto flex-shrink-0">{p?.club?.abbreviation || ''}</span>
+        )}
       </div>
     );
   }

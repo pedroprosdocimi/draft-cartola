@@ -73,13 +73,20 @@ export default function Draft({ roomCode, participantId, initialData }) {
     return ids;
   });
   const [myPicks, setMyPicks] = useState([]);
-  const [timeLeft, setTimeLeft] = useState(60);
+  const [timeLeft, setTimeLeft] = useState(5);
   const [pickNumber, setPickNumber] = useState(() =>
     (initialData.participants || []).reduce((sum, p) => sum + (p.picks || []).length, 0)
   );
   const [lastPick, setLastPick] = useState(null);
   const [notification, setNotification] = useState(null);
-  const [phase, setPhase] = useState(initialData.phase || 'main'); // 'main' | 'bench'
+  const [phase, setPhase] = useState(initialData.phase || 'main'); // 'main' | 'bench' | 'captain'
+  const [captainIds, setCaptainIds] = useState(() => {
+    const map = {};
+    for (const p of initialData.participants || []) {
+      if (p.captainId) map[p.id] = p.captainId;
+    }
+    return map;
+  });
   const [offeredPlayers, setOfferedPlayers] = useState(
     initialData.currentOptions
       ? initialData.currentOptions.map(p => ({ ...p, club: initialData.clubs?.[p.club_id] || null }))
@@ -164,7 +171,7 @@ export default function Draft({ roomCode, participantId, initialData }) {
       setPickedIds(prev => new Set([...prev, player.cartola_id]));
       setCurrentPickerId(nextParticipantId);
       setPickNumber(pickNumber);
-      setTimeLeft(60);
+      setTimeLeft(5);
       setLastPick({ participantId: pid, player });
       setParticipants(prev => prev.map(p =>
         p.id === pid ? { ...p, picks: [...(p.picks || []), player] } : p
@@ -188,12 +195,43 @@ export default function Draft({ roomCode, participantId, initialData }) {
       setCurrentPickerId(currentPickerId);
       setOfferedPlayers(null);
       setCurrentPickerPositionId(null);
-      setTimeLeft(60);
+      setTimeLeft(5);
       showNotification('🏃 Segunda fase: Draft de Reservas!', 'info');
+    };
+
+    const onCaptainDraftStarted = ({ currentPickerId, options }) => {
+      setPhase('captain');
+      setCurrentPickerId(currentPickerId);
+      setOfferedPlayers(options.map(p => ({
+        ...p,
+        club: clubs[p.club_id] || clubs[String(p.club_id)] || null,
+      })));
+      setCurrentPickerPositionId(null);
+      setTimeLeft(5);
+      showNotification('👑 Terceira fase: Escolha do Capitão!', 'info');
+    };
+
+    const onCaptainPicked = ({ participantId: pid, captainId, nextPickerId, nextOptions }) => {
+      setCaptainIds(prev => ({ ...prev, [pid]: captainId }));
+      setParticipants(prev => prev.map(p => p.id === pid ? { ...p, captainId } : p));
+      const pickerName = participantsRef.current.find(p => p.id === pid)?.name || 'Alguém';
+      showNotification(`👑 ${pickerName} escolheu seu capitão`, 'pick');
+      if (nextPickerId && nextOptions) {
+        setCurrentPickerId(nextPickerId);
+        setOfferedPlayers(nextOptions.map(p => ({
+          ...p,
+          club: clubs[p.club_id] || clubs[String(p.club_id)] || null,
+        })));
+        setTimeLeft(5);
+      } else {
+        setOfferedPlayers(null);
+      }
     };
 
     socket.on('draft_started', onDraftStarted);
     socket.on('bench_draft_started', onBenchDraftStarted);
+    socket.on('captain_draft_started', onCaptainDraftStarted);
+    socket.on('captain_picked', onCaptainPicked);
     socket.on('position_picked', onPositionPicked);
     socket.on('player_picked', onPlayerPicked);
     socket.on('auto_picked', onAutoPicked);
@@ -203,6 +241,8 @@ export default function Draft({ roomCode, participantId, initialData }) {
     return () => {
       socket.off('draft_started', onDraftStarted);
       socket.off('bench_draft_started', onBenchDraftStarted);
+      socket.off('captain_draft_started', onCaptainDraftStarted);
+      socket.off('captain_picked', onCaptainPicked);
       socket.off('position_picked', onPositionPicked);
       socket.off('player_picked', onPlayerPicked);
       socket.off('auto_picked', onAutoPicked);
@@ -228,20 +268,26 @@ export default function Draft({ roomCode, participantId, initialData }) {
     socket.emit('pick_player', { roomCode, participantId, cartolaId });
   }, [roomCode, participantId]);
 
+  const handlePickCaptain = useCallback((cartolaId) => {
+    socket.emit('pick_captain', { roomCode, participantId, cartolaId });
+  }, [roomCode, participantId]);
+
   const remainingOrder = draftOrder.slice(pickNumber);
 
   let turnText;
   if (isMyTurn) {
-    turnText = offeredPlayers
-      ? <p className="text-cartola-gold font-semibold">Escolha um dos jogadores!</p>
-      : phase === 'bench'
-        ? <p className="text-cartola-gold font-semibold">Escolha um slot de reserva!</p>
-        : <p className="text-cartola-gold font-semibold">Escolha uma posição!</p>;
+    turnText = phase === 'captain'
+      ? <p className="text-cartola-gold font-semibold">Escolha seu Capitão!</p>
+      : offeredPlayers
+        ? <p className="text-cartola-gold font-semibold">Escolha um dos jogadores!</p>
+        : phase === 'bench'
+          ? <p className="text-cartola-gold font-semibold">Escolha um slot de reserva!</p>
+          : <p className="text-cartola-gold font-semibold">Escolha uma posição!</p>;
   } else {
     turnText = (
       <p className="text-gray-400 text-sm">
         Aguardando <strong className="text-white">{currentPickerName}</strong>
-        {offeredPlayers ? ' escolher um jogador...' : phase === 'bench' ? ' escolher um reserva...' : ' escolher uma posição...'}
+        {phase === 'captain' ? ' escolher o capitão...' : offeredPlayers ? ' escolher um jogador...' : phase === 'bench' ? ' escolher um reserva...' : ' escolher uma posição...'}
       </p>
     );
   }
@@ -269,6 +315,11 @@ export default function Draft({ roomCode, participantId, initialData }) {
               Reservas
             </span>
           )}
+          {phase === 'captain' && (
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-900/50 text-yellow-300 border border-yellow-700">
+              Capitão
+            </span>
+          )}
         </div>
         <div className="text-sm font-semibold">
           {isMyTurn
@@ -285,7 +336,7 @@ export default function Draft({ roomCode, participantId, initialData }) {
         currentPickerPositionId={currentPickerPositionId}
         neededPositions={myNeededPositions}
         onPickPosition={handlePickPosition}
-        onPickPlayer={handlePickPlayer}
+        onPickPlayer={phase === 'captain' ? handlePickCaptain : handlePickPlayer}
         onPickBenchSlot={handlePickBenchSlot}
         currentPickerName={currentPickerName}
         clubMatches={clubMatches}
@@ -360,6 +411,7 @@ export default function Draft({ roomCode, participantId, initialData }) {
               ...p,
               club: clubs[p.club_id] || clubs[String(p.club_id)] || null
             }))}
+            captainId={captainIds[participantId] || null}
           />
         </div>
       </div>
