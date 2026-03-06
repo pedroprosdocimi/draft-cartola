@@ -15,10 +15,8 @@ const BENCH_TO_POSITIONS = { 21: [2, 3], 22: [4], 23: [5] };
 
 function scoreColor(score) {
   if (score == null) return 'text-gray-600';
-  if (score >= 7) return 'text-green-400';
-  if (score >= 4) return 'text-cartola-gold';
-  if (score > 0) return 'text-orange-400';
-  return 'text-red-400';
+  if (score < 0) return 'text-red-400';
+  return 'text-green-400';
 }
 
 // Returns substitution maps:
@@ -136,7 +134,7 @@ export default function DraftDetail({ roomCode, onClose }) {
     ? buildSubstitutions(activeTeam.picks)
     : { subMap: new Map(), usedBenchIds: new Set() };
 
-  const cols = hasRoundScores ? 5 : 4;
+  const cols = 5;
 
   return (
     <div className="fixed inset-0 bg-black/85 z-50 overflow-y-auto p-4">
@@ -145,18 +143,20 @@ export default function DraftDetail({ roomCode, onClose }) {
         {/* Header */}
         <div className="flex items-center justify-between mb-4 pt-2">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="font-mono font-bold text-white text-lg">{roomCode}</span>
-              {data.completedAt && (
-                <span className="text-xs text-gray-500">
-                  {new Date(data.completedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+              {data.roundNumber && (
+                <span className="bg-cartola-green/20 text-green-400 border border-cartola-green/40 text-xs font-bold px-2 py-0.5 rounded-full">
+                  Rodada {data.roundNumber}
                 </span>
               )}
+              {data.roundNumber && !hasRoundScores && (
+                <span className="text-xs text-gray-600 italic">sem pontuações ainda</span>
+              )}
             </div>
-            {data.roundNumber && (
+            {data.completedAt && (
               <p className="text-xs text-gray-500 mt-0.5">
-                Pontuação da rodada {data.roundNumber}
-                {!hasRoundScores && <span className="text-gray-600"> · ainda sem dados</span>}
+                Draft finalizado em {new Date(data.completedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
               </p>
             )}
           </div>
@@ -212,7 +212,7 @@ export default function DraftDetail({ roomCode, onClose }) {
                   <div className={`text-xl font-bold ${scoreColor(teamRoundScore(activeTeam.picks, activeTeam.captainId))}`}>
                     {teamRoundScore(activeTeam.picks, activeTeam.captainId).toFixed(2)}
                   </div>
-                  <div className="text-xs text-gray-500">pontos rodada {data.roundNumber}</div>
+                  <div className="text-xs text-gray-500">pts · Rodada {data.roundNumber}</div>
                 </div>
               )}
             </div>
@@ -223,10 +223,8 @@ export default function DraftDetail({ roomCode, onClose }) {
                   <th className="text-left py-2 px-2 text-gray-500 font-medium">Pos</th>
                   <th className="text-left py-2 px-2 text-gray-500 font-medium">Jogador</th>
                   <th className="text-left py-2 px-2 text-gray-500 font-medium">Clube</th>
-                  <th className="text-right py-2 px-2 text-gray-500 font-medium">Média</th>
-                  {hasRoundScores && (
-                    <th className="text-right py-2 px-2 text-gray-500 font-medium">Rodada</th>
-                  )}
+                  <th className="text-left py-2 px-2 text-gray-500 font-medium">Confronto</th>
+                  <th className="text-right py-2 px-2 text-gray-500 font-medium">Pontuação</th>
                 </tr>
               </thead>
               <tbody>
@@ -265,17 +263,15 @@ export default function DraftDetail({ roomCode, onClose }) {
                           </div>
                         </td>
                         <td className="py-2 px-2 text-gray-400 text-xs">{p.club?.abbreviation || '—'}</td>
-                        <td className="py-2 px-2 text-right text-gray-400 text-xs">{(p.average_score || 0).toFixed(1)}</td>
-                        {hasRoundScores && (
-                          <td className="py-2 px-2 text-right font-bold text-gray-600">
-                            {wasSubbedOut ? '0.00' : p.round_score != null ? (
-                              <span className={scoreColor(p.round_score)}>
-                                {(isCaptain ? p.round_score * 2 : p.round_score).toFixed(2)}
-                                {isCaptain && <span className="text-yellow-400 text-[10px] ml-1">×2</span>}
-                              </span>
-                            ) : '—'}
-                          </td>
-                        )}
+                        <td className="py-2 px-2 text-gray-500 text-xs">{p.match || '—'}</td>
+                        <td className="py-2 px-2 text-right font-bold text-gray-600">
+                          {wasSubbedOut ? '0.00' : p.round_score != null ? (
+                            <span className={scoreColor(p.round_score)}>
+                              {(isCaptain ? p.round_score * 2 : p.round_score).toFixed(2)}
+                              {isCaptain && <span className="text-yellow-400 text-[10px] ml-1">×2</span>}
+                            </span>
+                          ) : '—'}
+                        </td>
                       </tr>
 
                       {/* Sub-in row — bench player who replaced this starter */}
@@ -294,17 +290,15 @@ export default function DraftDetail({ roomCode, onClose }) {
                             </div>
                           </td>
                           <td className="py-1.5 px-2 text-gray-500 text-xs">{subIn.club?.abbreviation || '—'}</td>
-                          <td className="py-1.5 px-2 text-right text-gray-500 text-xs">{(subIn.average_score || 0).toFixed(1)}</td>
-                          {hasRoundScores && (
-                            <td className={`py-1.5 px-2 text-right font-bold ${scoreColor(displayScore)}`}>
-                              {displayScore != null ? (
-                                <span>
-                                  {displayScore.toFixed(2)}
-                                  {isCaptain && <span className="text-yellow-400 text-[10px] ml-1">×2</span>}
-                                </span>
-                              ) : '—'}
-                            </td>
-                          )}
+                          <td className="py-1.5 px-2 text-gray-600 text-xs">{subIn.match || '—'}</td>
+                          <td className={`py-1.5 px-2 text-right font-bold ${scoreColor(displayScore)}`}>
+                            {displayScore != null ? (
+                              <span>
+                                {displayScore.toFixed(2)}
+                                {isCaptain && <span className="text-yellow-400 text-[10px] ml-1">×2</span>}
+                              </span>
+                            ) : '—'}
+                          </td>
                         </tr>
                       )}
                     </React.Fragment>
@@ -336,12 +330,10 @@ export default function DraftDetail({ roomCode, onClose }) {
                             </div>
                           </td>
                           <td className="py-2 px-2 text-gray-500 text-xs">{p.club?.abbreviation || '—'}</td>
-                          <td className="py-2 px-2 text-right text-gray-500 text-xs">{(p.average_score || 0).toFixed(1)}</td>
-                          {hasRoundScores && (
-                            <td className={`py-2 px-2 text-right font-bold ${scoreColor(p.round_score)}`}>
-                              {p.round_score != null ? p.round_score.toFixed(2) : '—'}
-                            </td>
-                          )}
+                          <td className="py-2 px-2 text-gray-600 text-xs">{p.match || '—'}</td>
+                          <td className={`py-2 px-2 text-right font-bold ${scoreColor(p.round_score)}`}>
+                            {p.round_score != null ? p.round_score.toFixed(2) : '—'}
+                          </td>
                         </tr>
                       );
                     })}

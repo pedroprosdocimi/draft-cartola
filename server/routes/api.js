@@ -159,10 +159,28 @@ router.get('/drafts/history/:roomCode', async (req, res) => {
     [roomCode]
   )).rows;
 
-  // Use the round stored at draft completion time; fall back to latest if not set
-  const roundNumber = session.round_number || (await pool.query(
-    `SELECT round_number FROM round_scores GROUP BY round_number ORDER BY round_number DESC LIMIT 1`
-  )).rows[0]?.round_number || 0;
+  // Use the round stored at draft completion time; fall back to current round from DB
+  const roundNumber = session.round_number
+    || (await pool.query(`SELECT round_number FROM round_scores GROUP BY round_number ORDER BY round_number DESC LIMIT 1`)).rows[0]?.round_number
+    || (await pool.query(`SELECT round_number FROM rounds ORDER BY id DESC LIMIT 1`)).rows[0]?.round_number
+    || 0;
+
+  // Build clubMatches for this round
+  const matchRows = (await pool.query(`
+    SELECT m.home_club_id, m.away_club_id,
+           ch.abbreviation AS home_abbr, ca.abbreviation AS away_abbr
+    FROM matches m
+    JOIN rounds r ON r.id = m.round_id AND r.round_number = $1
+    JOIN clubs ch ON ch.id = m.home_club_id
+    JOIN clubs ca ON ca.id = m.away_club_id
+  `, [roundNumber])).rows;
+
+  const clubMatches = {};
+  for (const m of matchRows) {
+    const matchStr = `${m.home_abbr} x ${m.away_abbr}`;
+    clubMatches[m.home_club_id] = matchStr;
+    clubMatches[m.away_club_id] = matchStr;
+  }
 
   const picks = (await pool.query(`
     SELECT dp.participant_id, dp.cartola_id, dp.position_id AS slot_pos, dp.overall_pick,
@@ -201,6 +219,7 @@ router.get('/drafts/history/:roomCode', async (req, res) => {
         played: pick.played,
         status_id: pick.status_id,
         club: pick.club_id ? { abbreviation: pick.club_abbreviation } : null,
+        match: clubMatches[pick.club_id] || null,
       }))
   }));
 
