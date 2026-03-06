@@ -180,29 +180,26 @@ export default function PlayerCard({
 
         {/* Info */}
         <div className="flex flex-col p-2 gap-1.5 flex-1">
-          {/* Name + pos + club — unified block */}
-          <div className="text-center flex flex-col gap-1">
-            <span className="font-extrabold text-white text-base leading-tight line-clamp-2">
+          {/* Name + pos — same line */}
+          <div className="flex items-center justify-center gap-1.5 flex-wrap">
+            <span className={`${posBg} text-white text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0`}>
+              {posLabel}
+            </span>
+            <span className="font-extrabold text-white text-base leading-tight line-clamp-2 text-center">
               {player.nickname}
             </span>
-            <div className="flex items-center justify-center gap-1.5">
-              <span className={`${posBg} text-white text-xs font-bold px-1.5 py-0.5 rounded`}>
-                {posLabel}
-              </span>
-              <AvgScore score={player.average_score} posAvg={posAvg} />
-            </div>
           </div>
 
           {/* Divider: scores */}
           <div className="border-t border-gray-700 pt-1.5 w-full">
             <div className="flex justify-around text-center">
               <div>
-                <div className="text-gray-600 text-xs leading-none mb-0.5">Média</div>
+                <div className="text-gray-400 text-xs leading-none mb-0.5">Média</div>
                 <AvgScore score={player.average_score} posAvg={posAvg} />
               </div>
               {player.recentScores?.length > 0 && (
                 <div>
-                  <div className="text-gray-600 text-xs leading-none mb-0.5">Última</div>
+                  <div className="text-gray-400 text-xs leading-none mb-0.5">Última</div>
                   {(() => {
                     const s = player.recentScores[0].score || 0;
                     const color = s >= 6 ? 'text-green-400' : s >= 3 ? 'text-cartola-gold' : 'text-red-400';
@@ -212,7 +209,7 @@ export default function PlayerCard({
               )}
               {posAvg != null && (
                 <div>
-                  <div className="text-gray-600 text-xs leading-none mb-0.5">Média pos.</div>
+                  <div className="text-gray-400 text-xs leading-none mb-0.5">Média pos.</div>
                   <span className="text-xs font-semibold text-gray-400">{posAvg.toFixed(1)}</span>
                 </div>
               )}
@@ -224,7 +221,7 @@ export default function PlayerCard({
             <>
               <div className="border-t border-gray-700" />
               <div className="text-center">
-                <div className="text-gray-600 text-xs uppercase tracking-wide mb-0.5">Próximo confronto</div>
+                <div className="text-gray-400 text-xs uppercase tracking-wide mb-0.5">Próximo confronto</div>
                 <div className="text-xs text-blue-400 font-medium">{match}</div>
               </div>
             </>
