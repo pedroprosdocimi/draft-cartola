@@ -22,6 +22,17 @@ async function initDb() {
     `ALTER TABLE draft_picks ADD COLUMN IF NOT EXISTS position_id INTEGER`,
     `ALTER TABLE draft_picks ADD COLUMN IF NOT EXISTS options_json TEXT`,
     `ALTER TABLE draft_participants ADD COLUMN IF NOT EXISTS captain_cartola_id INTEGER`,
+    `CREATE TABLE IF NOT EXISTS round_scores (
+      id SERIAL PRIMARY KEY,
+      cartola_id INTEGER NOT NULL,
+      round_number INTEGER NOT NULL,
+      score REAL NOT NULL DEFAULT 0,
+      scout_data TEXT,
+      fetched_at TEXT,
+      UNIQUE(cartola_id, round_number)
+    )`,
+    `ALTER TABLE round_scores ADD COLUMN IF NOT EXISTS scout_data TEXT`,
+    `ALTER TABLE round_scores ADD COLUMN IF NOT EXISTS fetched_at TEXT`,
   ];
   for (const m of migrations) {
     try { await pool.query(m); } catch { /* column already exists */ }

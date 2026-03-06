@@ -272,4 +272,36 @@ async function getPlayersAndClubs() {
   return { players, clubs, clubMatches };
 }
 
-module.exports = { getPlayersAndClubs, syncFromAPI };
+// Sync round scores from /atletas/pontuados — call during/after each round
+// Only players who actually played appear in this endpoint.
+// A row in round_scores means the player played; absence means they didn't.
+async function syncRoundScores() {
+  const marketStatus = await fetchMarketStatus();
+  const roundNumber = marketStatus.rodada_atual;
+  const fetchedAt = new Date().toISOString();
+
+  const data = await fetchPontuados(roundNumber, true);
+  const atletas = data?.atletas || {};
+
+  let count = 0;
+  for (const [id, atleta] of Object.entries(atletas)) {
+    const cartolaId = parseInt(id);
+    const score = atleta.pontuacao ?? 0;
+    const scoutData = atleta.scout ? JSON.stringify(atleta.scout) : null;
+    await pool.query(
+      `INSERT INTO round_scores (cartola_id, round_number, score, scout_data, fetched_at)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (cartola_id, round_number) DO UPDATE
+         SET score = EXCLUDED.score,
+             scout_data = EXCLUDED.scout_data,
+             fetched_at = EXCLUDED.fetched_at`,
+      [cartolaId, roundNumber, score, scoutData, fetchedAt]
+    );
+    count++;
+  }
+
+  console.log(`[sync] Rodada ${roundNumber}: ${count} pontuações salvas de /atletas/pontuados (${fetchedAt})`);
+  return { roundNumber, count, fetchedAt };
+}
+
+module.exports = { getPlayersAndClubs, syncFromAPI, syncRoundScores };

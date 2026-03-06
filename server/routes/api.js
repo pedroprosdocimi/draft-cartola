@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getPlayersAndClubs, syncFromAPI } = require('../services/cartola');
+const { getPlayersAndClubs, syncFromAPI, syncRoundScores } = require('../services/cartola');
 const { pool } = require('../db');
 
 // Sync all data from Cartola API into local DB.
@@ -11,6 +11,18 @@ router.post('/sync', async (req, res) => {
     res.json({ ok: true, ...stats });
   } catch (err) {
     console.error('[sync] erro:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// POST /api/sync/scores — sync current round scores from /atletas/pontuados
+// Call this during/after each round to know who played and their score.
+router.post('/sync/scores', async (req, res) => {
+  try {
+    const stats = await syncRoundScores();
+    res.json({ ok: true, ...stats });
+  } catch (err) {
+    console.error('[sync/scores] erro:', err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
@@ -148,9 +160,8 @@ router.get('/drafts/history/:roomCode', async (req, res) => {
   )).rows;
 
   const latestRound = (await pool.query(
-    `SELECT id, round_number FROM rounds
-     WHERE EXISTS (SELECT 1 FROM player_scouts ps WHERE ps.round_number = rounds.round_number AND ps.pontuacao IS NOT NULL)
-     ORDER BY id DESC LIMIT 1`
+    `SELECT round_number FROM round_scores
+     GROUP BY round_number ORDER BY round_number DESC LIMIT 1`
   )).rows[0];
 
   const picks = (await pool.query(`
@@ -158,14 +169,15 @@ router.get('/drafts/history/:roomCode', async (req, res) => {
            p.nickname, p.photo_url,
            prd.position_id AS real_pos, prd.club_id, prd.average_score, prd.status_id,
            c.abbreviation AS club_abbreviation,
-           ps.pontuacao AS round_score
+           rs.score AS round_score,
+           CASE WHEN rs.cartola_id IS NOT NULL THEN true ELSE false END AS played
     FROM draft_picks dp
     JOIN players p ON p.cartola_id = dp.cartola_id
     LEFT JOIN player_round_data prd ON prd.player_id = p.id
       AND prd.round_id = (SELECT id FROM rounds ORDER BY id DESC LIMIT 1)
     LEFT JOIN clubs c ON c.id = prd.club_id
-    LEFT JOIN player_scouts ps ON ps.player_id = p.id
-      AND ps.round_number = $2
+    LEFT JOIN round_scores rs ON rs.cartola_id = dp.cartola_id
+      AND rs.round_number = $2
     WHERE dp.session_id = $1
     ORDER BY dp.overall_pick ASC
   `, [roomCode, latestRound?.round_number || 0])).rows;
@@ -185,7 +197,8 @@ router.get('/drafts/history/:roomCode', async (req, res) => {
         position_id: pick.slot_pos ?? pick.real_pos,
         club_id: pick.club_id,
         average_score: pick.average_score,
-        round_score: pick.round_score ?? null,
+        round_score: pick.played ? (pick.round_score ?? 0) : null,
+        played: pick.played,
         status_id: pick.status_id,
         club: pick.club_id ? { abbreviation: pick.club_abbreviation } : null,
       }))

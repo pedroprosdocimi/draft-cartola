@@ -140,9 +140,11 @@ export default function Admin({ onBack }) {
 
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [syncingScores, setSyncingScores] = useState(false);
   const [togglingId, setTogglingId] = useState(null);
   const [error, setError] = useState(null);
   const [syncResult, setSyncResult] = useState(null);
+  const [scoreSyncResult, setScoreSyncResult] = useState(null);
 
   const token = localStorage.getItem('draft_token');
   const headers = { Authorization: `Bearer ${token}` };
@@ -190,6 +192,25 @@ export default function Admin({ onBack }) {
       setError('Erro de conexão.');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleSyncScores = async () => {
+    setSyncingScores(true);
+    setScoreSyncResult(null);
+    setError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/sync/scores`, { method: 'POST', headers });
+      const data = await res.json();
+      if (data.ok) {
+        setScoreSyncResult(data);
+      } else {
+        setError(data.error || 'Erro ao buscar pontuações.');
+      }
+    } catch {
+      setError('Erro de conexão.');
+    } finally {
+      setSyncingScores(false);
     }
   };
 
@@ -304,20 +325,35 @@ export default function Admin({ onBack }) {
                 ✓ Sync concluído — rodada {syncResult.roundNumber}, {syncResult.playerCount} jogadores, {syncResult.matchCount} partidas
               </p>
             )}
+            {scoreSyncResult && (
+              <p className="mt-2 text-blue-400 text-sm">
+                ✓ Pontuações atualizadas — rodada {scoreSyncResult.roundNumber}, {scoreSyncResult.count} jogadores
+              </p>
+            )}
             {error && (
               <p className="mt-2 text-red-400 text-sm bg-red-900/20 border border-red-800 rounded px-3 py-1.5">
                 {error}
               </p>
             )}
           </div>
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="btn-primary flex-shrink-0 flex items-center gap-2"
-          >
-            <span className={syncing ? 'animate-spin inline-block' : ''}>🔄</span>
-            {syncing ? 'Sincronizando...' : 'Sincronizar Cartola'}
-          </button>
+          <div className="flex flex-col gap-2 flex-shrink-0">
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="btn-primary flex items-center gap-2"
+            >
+              <span className={syncing ? 'animate-spin inline-block' : ''}>🔄</span>
+              {syncing ? 'Sincronizando...' : 'Sincronizar Cartola'}
+            </button>
+            <button
+              onClick={handleSyncScores}
+              disabled={syncingScores}
+              className="flex items-center gap-2 justify-center px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-blue-900/40 text-blue-300 hover:bg-blue-900/60 border border-blue-700 disabled:opacity-50"
+            >
+              <span className={syncingScores ? 'animate-spin inline-block' : ''}>⚽</span>
+              {syncingScores ? 'Buscando...' : 'Buscar Pontuações'}
+            </button>
+          </div>
         </div>
       </div>
 
