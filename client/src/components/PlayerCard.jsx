@@ -16,6 +16,33 @@ const POSITION_GLOW = {
   5: 'hover:shadow-red-600/40',
 };
 
+const STATUS_INFO = {
+  7: { label: 'Provável',  bg: 'bg-green-900/50',  text: 'text-green-300',  dot: 'bg-green-400'  },
+  2: { label: 'Dúvida',    bg: 'bg-yellow-900/50', text: 'text-yellow-300', dot: 'bg-yellow-400' },
+  3: { label: 'Suspenso',  bg: 'bg-red-900/50',    text: 'text-red-300',    dot: 'bg-red-400'    },
+  5: { label: 'Lesionado', bg: 'bg-red-900/50',    text: 'text-red-300',    dot: 'bg-red-400'    },
+  6: { label: 'Nulo',      bg: 'bg-gray-800',      text: 'text-gray-400',   dot: 'bg-gray-500'   },
+};
+
+function StatusBadge({ statusId, small = false }) {
+  const info = STATUS_INFO[statusId];
+  if (!info) return null;
+  if (small) {
+    return (
+      <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded ${info.bg} ${info.text} flex-shrink-0`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${info.dot} flex-shrink-0`} />
+        {info.label}
+      </span>
+    );
+  }
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded ${info.bg} ${info.text}`}>
+      <span className={`w-2 h-2 rounded-full ${info.dot} flex-shrink-0`} />
+      {info.label}
+    </span>
+  );
+}
+
 const SCOUT_CONFIG = {
   1: [ // GOL
     { key: 'DE',  label: 'Defesa',              icon: '🧤', positive: true  },
@@ -151,6 +178,7 @@ export default function PlayerCard({
           </div>
         </div>
         <span className={`${posBg} text-white text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0`}>{posLabel}</span>
+        {player.status_id != null && <StatusBadge statusId={player.status_id} small />}
         <div className="text-right flex-shrink-0">
           <AvgScore score={player.average_score} posAvg={posAvg} />
           <div className="text-xs text-gray-600">C${player.price?.toFixed(0)}</div>
@@ -195,6 +223,13 @@ export default function PlayerCard({
               {player.nickname}
             </span>
           </div>
+
+          {/* Status */}
+          {player.status_id != null && (
+            <div className="flex justify-center">
+              <StatusBadge statusId={player.status_id} />
+            </div>
+          )}
 
           {/* Divider: scores */}
           <div className="border-t border-gray-700 pt-1.5 w-full">
