@@ -37,7 +37,7 @@ function buildSubstitutions(picks) {
     const allowed = BENCH_TO_POSITIONS[bench.position_id] || [];
     const target = mainPicks.find(p =>
       allowed.includes(p.position_id) &&
-      (!p.round_score || p.round_score === 0) &&
+      p.round_score == null &&
       !subMap.has(p.cartola_id)
     );
     if (target) {
@@ -55,7 +55,7 @@ function teamRoundScore(picks, captainId) {
 
   return mainPicks.reduce((sum, p) => {
     const effective = subMap.has(p.cartola_id) ? subMap.get(p.cartola_id) : p;
-    const score = effective.round_score || 0;
+    const score = effective.round_score ?? 0;
     const multiplier = p.cartola_id === captainId ? 2 : 1;
     return sum + score * multiplier;
   }, 0);
@@ -236,8 +236,8 @@ export default function DraftDetail({ roomCode, onClose }) {
                   const wasSubbedOut = !!subIn;
 
                   // Effective score for this slot
-                  const slotScore = wasSubbedOut ? (subIn.round_score || 0) : (p.round_score || 0);
-                  const displayScore = p.round_score != null || wasSubbedOut
+                  const slotScore = wasSubbedOut ? (subIn.round_score || 0) : (p.round_score ?? 0);
+                  const displayScore = (p.round_score != null || wasSubbedOut)
                     ? (isCaptain ? slotScore * 2 : slotScore)
                     : null;
 
