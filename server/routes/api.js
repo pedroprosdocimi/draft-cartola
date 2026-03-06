@@ -159,10 +159,10 @@ router.get('/drafts/history/:roomCode', async (req, res) => {
     [roomCode]
   )).rows;
 
-  const latestRound = (await pool.query(
-    `SELECT round_number FROM round_scores
-     GROUP BY round_number ORDER BY round_number DESC LIMIT 1`
-  )).rows[0];
+  // Use the round stored at draft completion time; fall back to latest if not set
+  const roundNumber = session.round_number || (await pool.query(
+    `SELECT round_number FROM round_scores GROUP BY round_number ORDER BY round_number DESC LIMIT 1`
+  )).rows[0]?.round_number || 0;
 
   const picks = (await pool.query(`
     SELECT dp.participant_id, dp.cartola_id, dp.position_id AS slot_pos, dp.overall_pick,
@@ -180,7 +180,7 @@ router.get('/drafts/history/:roomCode', async (req, res) => {
       AND rs.round_number = $2
     WHERE dp.session_id = $1
     ORDER BY dp.overall_pick ASC
-  `, [roomCode, latestRound?.round_number || 0])).rows;
+  `, [roomCode, roundNumber])).rows;
 
   const teams = participants.map(p => ({
     id: p.id,
@@ -208,7 +208,7 @@ router.get('/drafts/history/:roomCode', async (req, res) => {
     roomCode,
     status: session.status,
     completedAt: session.completed_at,
-    roundNumber: latestRound?.round_number || null,
+    roundNumber: roundNumber || null,
     teams,
   });
 });

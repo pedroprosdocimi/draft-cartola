@@ -33,6 +33,7 @@ async function initDb() {
     )`,
     `ALTER TABLE round_scores ADD COLUMN IF NOT EXISTS scout_data TEXT`,
     `ALTER TABLE round_scores ADD COLUMN IF NOT EXISTS fetched_at TEXT`,
+    `ALTER TABLE draft_sessions ADD COLUMN IF NOT EXISTS round_number INTEGER`,
   ];
   for (const m of migrations) {
     try { await pool.query(m); } catch { /* column already exists */ }

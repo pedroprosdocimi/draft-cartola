@@ -275,9 +275,10 @@ async function executeCaptainPick(room, participantId, cartolaId, io) {
 
   if (!nextPickerId) {
     room.status = 'complete';
+    const roundRow = (await pool.query('SELECT round_number FROM rounds ORDER BY id DESC LIMIT 1')).rows[0];
     await pool.query(
-      `UPDATE draft_sessions SET completed_at = $1, status = 'complete' WHERE id = $2`,
-      [new Date().toISOString(), room.code]
+      `UPDATE draft_sessions SET completed_at = $1, status = 'complete', round_number = $2 WHERE id = $3`,
+      [new Date().toISOString(), roundRow?.round_number || null, room.code]
     );
     io.to(room.code).emit('captain_picked', { participantId, captainId: cartolaId });
     io.to(room.code).emit('draft_complete', { teams: buildTeams(room) });
