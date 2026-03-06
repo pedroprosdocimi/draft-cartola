@@ -45,33 +45,23 @@ export default function App() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // On load: if URL has a room code, store it for Home to use
+  // On load: if URL has a room code, handle invite or reconnect
   useEffect(() => {
     const urlCode = getRoomCodeFromUrl();
     if (!urlCode) return;
     const session = readSession();
-    // If no active session for this room, save as invite for Home to pre-fill
     if (!session || session.roomCode !== urlCode) {
+      // No matching session → save as invite for Home to pre-fill
       sessionStorage.setItem('draft_invite_code', urlCode);
+      window.history.replaceState(null, '', '/');
     }
-    // Always clean the URL — navigation is handled by state
-    window.history.replaceState(null, '', '/');
+    // If session matches → keep URL, reconnect will happen via socket connect
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync URL with current room state
-  useEffect(() => {
-    const inRoom = roomCode && ['lobby', 'draft', 'end'].includes(page);
-    const target = inRoom ? `/${roomCode}` : '/';
-    if (window.location.pathname !== target) {
-      window.history.replaceState(null, '', target);
-    }
-  }, [page, roomCode]);
-
-  // Browser back button: if user navigates away from room URL → go home
+  // Browser back button → exit room and go home
   useEffect(() => {
     const onPopState = () => {
-      const urlCode = getRoomCodeFromUrl();
-      if (!urlCode) {
+      if (!getRoomCodeFromUrl()) {
         clearSession();
         setPage('home');
         setRoomCode(null);
@@ -128,6 +118,7 @@ export default function App() {
       setPage('lobby');
       setLoading(false);
       saveSession(rc, pid, admin);
+      window.history.pushState(null, '', `/${rc}`);
     });
 
     socket.on('loading', ({ message }) => setLoading(message));
@@ -142,6 +133,7 @@ export default function App() {
       setTeams(t);
       setPage('end');
       clearSession();
+      window.history.replaceState(null, '', '/');
     });
 
     socket.on('error', ({ message }) => {

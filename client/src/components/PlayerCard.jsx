@@ -61,9 +61,13 @@ const SCOUT_CONFIG = {
 
 function AvgScore({ score, posAvg }) {
   const s = score || 0;
-  const hasAvg = posAvg != null;
-  const above = s >= posAvg;
-  const color = !hasAvg ? 'text-cartola-gold' : above ? 'text-green-400' : 'text-red-400';
+  let color;
+  if (posAvg != null) {
+    color = s >= posAvg ? 'text-green-400' : 'text-red-400';
+  } else {
+    // fallback thresholds when position average isn't available
+    color = s >= 6 ? 'text-green-400' : s >= 3 ? 'text-cartola-gold' : 'text-red-400';
+  }
   return <span className={`${color} text-xs font-semibold`}>{s.toFixed(1)}</span>;
 }
 
@@ -186,6 +190,32 @@ export default function PlayerCard({
                 {posLabel}
               </span>
               <AvgScore score={player.average_score} posAvg={posAvg} />
+            </div>
+          </div>
+
+          {/* Divider: scores */}
+          <div className="border-t border-gray-700 pt-1.5 w-full">
+            <div className="flex justify-around text-center">
+              <div>
+                <div className="text-gray-600 text-xs leading-none mb-0.5">Média</div>
+                <AvgScore score={player.average_score} posAvg={posAvg} />
+              </div>
+              {player.recentScores?.length > 0 && (
+                <div>
+                  <div className="text-gray-600 text-xs leading-none mb-0.5">Última</div>
+                  {(() => {
+                    const s = player.recentScores[0].score || 0;
+                    const color = s >= 6 ? 'text-green-400' : s >= 3 ? 'text-cartola-gold' : 'text-red-400';
+                    return <span className={`text-xs font-semibold ${color}`}>{s.toFixed(1)}</span>;
+                  })()}
+                </div>
+              )}
+              {posAvg != null && (
+                <div>
+                  <div className="text-gray-600 text-xs leading-none mb-0.5">Média pos.</div>
+                  <span className="text-xs font-semibold text-gray-400">{posAvg.toFixed(1)}</span>
+                </div>
+              )}
             </div>
           </div>
 
