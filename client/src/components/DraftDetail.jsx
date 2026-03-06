@@ -8,6 +8,7 @@ const POS_COLORS = {
   21: 'text-green-500', 22: 'text-yellow-500', 23: 'text-red-500',
 };
 const BENCH_SLOT_IDS = [21, 22, 23];
+const POS_ORDER = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 21: 5, 22: 6, 23: 7 };
 
 function scoreColor(score) {
   if (score == null) return 'text-gray-600';
@@ -17,10 +18,13 @@ function scoreColor(score) {
   return 'text-red-400';
 }
 
-function teamRoundScore(picks) {
+function teamRoundScore(picks, captainId) {
   return picks
     .filter(p => !BENCH_SLOT_IDS.includes(p.position_id))
-    .reduce((sum, p) => sum + (p.round_score || 0), 0);
+    .reduce((sum, p) => {
+      const score = p.round_score || 0;
+      return sum + (p.cartola_id === captainId ? score * 2 : score);
+    }, 0);
 }
 
 function teamAvgScore(picks) {
@@ -88,8 +92,10 @@ export default function DraftDetail({ roomCode, onClose }) {
 
   const sortedTeams = [...data.teams].sort((a, b) => (a.pickOrder || 0) - (b.pickOrder || 0));
   const activeTeam = data.teams.find(t => t.id === activeTab);
-  const mainPicks = activeTeam?.picks.filter(p => !BENCH_SLOT_IDS.includes(p.position_id)) || [];
-  const benchPicks = activeTeam?.picks.filter(p => BENCH_SLOT_IDS.includes(p.position_id)) || [];
+  const mainPicks = (activeTeam?.picks.filter(p => !BENCH_SLOT_IDS.includes(p.position_id)) || [])
+    .sort((a, b) => (POS_ORDER[a.position_id] ?? 9) - (POS_ORDER[b.position_id] ?? 9));
+  const benchPicks = (activeTeam?.picks.filter(p => BENCH_SLOT_IDS.includes(p.position_id)) || [])
+    .sort((a, b) => (POS_ORDER[a.position_id] ?? 9) - (POS_ORDER[b.position_id] ?? 9));
 
   return (
     <div className="fixed inset-0 bg-black/85 z-50 overflow-y-auto p-4">
@@ -128,7 +134,7 @@ export default function DraftDetail({ roomCode, onClose }) {
         {/* Team summary cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
           {sortedTeams.map(team => {
-            const roundTotal = teamRoundScore(team.picks);
+            const roundTotal = teamRoundScore(team.picks, team.captainId);
             const avgTotal = teamAvgScore(team.picks);
             return (
               <button
@@ -162,8 +168,8 @@ export default function DraftDetail({ roomCode, onClose }) {
               </div>
               {hasRoundScores && (
                 <div className="text-right">
-                  <div className={`text-xl font-bold ${scoreColor(teamRoundScore(activeTeam.picks))}`}>
-                    {teamRoundScore(activeTeam.picks).toFixed(2)}
+                  <div className={`text-xl font-bold ${scoreColor(teamRoundScore(activeTeam.picks, activeTeam.captainId))}`}>
+                    {teamRoundScore(activeTeam.picks, activeTeam.captainId).toFixed(2)}
                   </div>
                   <div className="text-xs text-gray-500">pontos rodada {data.roundNumber}</div>
                 </div>
@@ -201,11 +207,24 @@ export default function DraftDetail({ roomCode, onClose }) {
                     </td>
                     <td className="py-2 px-2 text-gray-400 text-xs">{p.club?.abbreviation || '—'}</td>
                     <td className="py-2 px-2 text-right text-gray-400 text-xs">{(p.average_score || 0).toFixed(1)}</td>
-                    {hasRoundScores && (
-                      <td className={`py-2 px-2 text-right font-bold ${scoreColor(p.round_score)}`}>
-                        {p.round_score != null ? p.round_score.toFixed(2) : '—'}
-                      </td>
-                    )}
+                    {hasRoundScores && (() => {
+                      const isCaptain = p.cartola_id === activeTeam.captainId;
+                      const displayScore = p.round_score != null
+                        ? (isCaptain ? p.round_score * 2 : p.round_score)
+                        : null;
+                      return (
+                        <td className={`py-2 px-2 text-right font-bold ${scoreColor(displayScore)}`}>
+                          {displayScore != null ? (
+                            <span>
+                              {displayScore.toFixed(2)}
+                              {isCaptain && p.round_score != null && (
+                                <span className="text-yellow-400 text-[10px] ml-1">×2</span>
+                              )}
+                            </span>
+                          ) : '—'}
+                        </td>
+                      );
+                    })()}
                   </tr>
                 ))}
 
