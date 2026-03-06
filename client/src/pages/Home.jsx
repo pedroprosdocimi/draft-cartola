@@ -1,15 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import socket from '../socket.js';
+import { API_URL } from '../config.js';
 
 function readSession() {
   try { return JSON.parse(localStorage.getItem('draft_session')); } catch { return null; }
 }
 
+const STATUS_LABELS = {
+  lobby: 'Aguardando',
+  drafting: 'Em andamento',
+  bench_drafting: 'Reservas',
+  captain_drafting: 'Capitão',
+};
+
 export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
   const [roomCode, setRoomCode] = useState('');
   const [tab, setTab] = useState('create'); // 'create' | 'join' — only admin sees tabs
+  const [activeDrafts, setActiveDrafts] = useState([]);
 
   const activeSession = readSession();
+
+  useEffect(() => {
+    const token = localStorage.getItem('draft_token');
+    if (!token) return;
+    fetch(`${API_URL}/api/drafts/active`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(data => { if (data.drafts) setActiveDrafts(data.drafts); })
+      .catch(() => {});
+  }, []);
+
+  const handleRejoinDraft = (rc, pid) => {
+    socket.emit('reconnect_participant', { roomCode: rc, participantId: pid });
+  };
 
   // Auto-fill invite code from URL (e.g. /ABC123)
   useEffect(() => {
@@ -55,6 +79,34 @@ export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
             </button>
           </div>
         </div>
+
+        {/* Active drafts from server */}
+        {activeDrafts.length > 0 && (
+          <div className="mb-4">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Seus drafts ativos</p>
+            <div className="space-y-2">
+              {activeDrafts.map(draft => (
+                <div key={draft.room_code} className="rounded-xl border border-gray-700 bg-gray-800/60 px-4 py-3 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-white text-sm">{draft.room_code}</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-cartola-green/20 text-green-400 border border-cartola-green/30">
+                        {STATUS_LABELS[draft.status] || draft.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">{draft.participant_count} participante{draft.participant_count !== '1' ? 's' : ''}</p>
+                  </div>
+                  <button
+                    onClick={() => handleRejoinDraft(draft.room_code, draft.participant_id)}
+                    className="flex-shrink-0 btn-primary text-sm py-1.5 px-4"
+                  >
+                    Entrar
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Active draft banner */}
         {activeSession?.roomCode && (

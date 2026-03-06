@@ -180,8 +180,8 @@ export default function EndScreen({ teams, participantId }) {
       </div>
 
       <div className="text-center mt-8 pb-8">
-        <button onClick={() => window.location.reload()} className="btn-secondary">
-          Novo Draft
+        <button onClick={() => window.location.reload()} className="btn-primary">
+          Voltar para a página inicial
         </button>
       </div>
     </div>
