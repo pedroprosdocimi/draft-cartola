@@ -81,7 +81,10 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
   };
 
   if (isParallelWaiting || (roomState?.mode === 'parallel' && roomState?.status !== 'lobby')) {
-    const phaseLabel = parallelPhase === 'bench' ? 'Reservas' : parallelPhase === 'captain' ? 'Capitão' : 'Principal';
+    const activeStatus = roomState?.status;
+    const phaseLabel = activeStatus === 'bench_drafting' ? 'Reservas'
+      : activeStatus === 'captain_drafting' ? 'Capitão'
+      : 'Draft completo por jogador';
     const participants = roomState?.participants || [];
 
     const activeDraftingName = !isParallelWaiting && parallelCurrentDrafter
@@ -143,10 +146,13 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
           <h2 className="text-sm font-semibold text-gray-400 mb-3">Progresso dos Times</h2>
           <div className="space-y-3">
             {participants.map(p => {
-              const total = p.formation
-                ? (parallelPhase === 'bench' ? 3 : formationTotal(p.formation))
-                : 0;
-              const done = participantPicksDone(p, parallelPhase);
+              // Total = main + bench picks; captain is shown separately
+              const mainTotal = p.formation ? formationTotal(p.formation) : 0;
+              const total = mainTotal + 3; // +3 bench slots
+              const mainDone = participantPicksDone(p, 'main');
+              const benchDone = participantPicksDone(p, 'bench');
+              const done = mainDone + benchDone;
+              const hasCaptain = !!p.captainId;
               const pct = total > 0 ? Math.round((done / total) * 100) : 0;
               const isCurrent = p.id === currentPickerId;
               return (
@@ -158,14 +164,16 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
                       {p.name}
                       {p.id === participantId && <span className="text-xs text-gray-500">(você)</span>}
                     </span>
-                    <span className="text-gray-500 text-xs">{done}/{total}</span>
+                    <span className="text-gray-500 text-xs">
+                      {hasCaptain ? '✓ Capitão' : `${done}/${total} picks`}
+                    </span>
                   </div>
                   <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-300 ${
-                        pct === 100 ? 'bg-cartola-green' : isCurrent ? 'bg-cartola-gold' : 'bg-gray-600'
+                        hasCaptain ? 'bg-cartola-green' : isCurrent ? 'bg-cartola-gold' : 'bg-gray-600'
                       }`}
-                      style={{ width: `${pct}%` }}
+                      style={{ width: hasCaptain ? '100%' : `${pct}%` }}
                     />
                   </div>
                 </div>

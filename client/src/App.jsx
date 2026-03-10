@@ -166,6 +166,7 @@ export default function App() {
   // Handle room_state for reconnect navigation
   useEffect(() => {
     const onRoomState = (state) => {
+      setLoading(false);
       setRoomCode(state.roomCode);
       const pid = readSession()?.participantId;
       setIsAdmin(state.adminId === pid);

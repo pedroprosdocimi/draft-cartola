@@ -138,7 +138,7 @@ module.exports = function registerHandlers(io) {
       if (room.adminId !== participantId) return socket.emit('error', { message: 'Apenas o admin pode iniciar.' });
 
       try {
-        socket.emit('loading', { message: 'Carregando jogadores do banco local...' });
+        io.to(roomCode).emit('loading', { message: 'Carregando jogadores do banco local...' });
         const { players, clubs, clubMatches } = await getPlayersAndClubs();
 
         const result = await startDraft(roomCode, players, clubs, clubMatches, mode || 'realtime');
