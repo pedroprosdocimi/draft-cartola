@@ -24,7 +24,7 @@ function participantPicksDone(participant, phase) {
   return participant.picks.filter(p => !BENCH_SLOT_IDS.includes(p.position_id)).length;
 }
 
-export default function Lobby({ roomCode, participantId, isAdmin, initialState, onLeave }) {
+export default function Lobby({ roomCode, participantId, isAdmin, initialState, onLeave, onGoHome }) {
   const [roomState, setRoomState] = useState(initialState || null);
   const [selectedFormation, setSelectedFormation] = useState(() => {
     const me = initialState?.participants?.find(p => p.id === participantId);
@@ -34,13 +34,13 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    socket.on('room_state', (state) => {
+    const onRoomState = (state) => {
       setRoomState(state);
-      // Sync formation
-      const me = state.participants.find(p => p.id === participantId);
+      const me = state.participants?.find(p => p.id === participantId);
       if (me?.formation) setSelectedFormation(me.formation);
-    });
-    return () => socket.off('room_state');
+    };
+    socket.on('room_state', onRoomState);
+    return () => socket.off('room_state', onRoomState);
   }, [participantId]);
 
   const handleFormation = (f) => {
@@ -71,7 +71,7 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
     : 0;
 
   const isParallelWaiting = roomState?.status === 'parallel_waiting';
-  const parallelPhase = roomState?.parallelPhase || 'main';
+  const parallelPhase = roomState?.phase || roomState?.parallelPhase || 'main';
   const currentPickerId = roomState?.currentPickerId;
   const isMyParallelTurn = isParallelWaiting && currentPickerId === participantId;
   const parallelCurrentDrafter = roomState?.participants?.find(p => p.id === currentPickerId);
@@ -84,9 +84,19 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
     const phaseLabel = parallelPhase === 'bench' ? 'Reservas' : parallelPhase === 'captain' ? 'Capitão' : 'Principal';
     const participants = roomState?.participants || [];
 
+    const activeDraftingName = !isParallelWaiting && parallelCurrentDrafter
+      ? parallelCurrentDrafter.name
+      : null;
+
     return (
       <div className="min-h-screen p-4 max-w-2xl mx-auto">
-        <div className="text-center mb-8 pt-6">
+        <div className="text-center mb-8 pt-6 relative">
+          <button
+            onClick={onGoHome}
+            className="absolute left-0 top-6 text-sm text-gray-500 hover:text-white transition-colors px-2 py-1 rounded"
+          >
+            ← Início
+          </button>
           <h1 className="text-3xl font-bold mb-1">⚽ Draft Paralelo</h1>
           <p className="text-gray-500 text-sm font-mono">{roomCode}</p>
           <div className="mt-2 inline-flex items-center gap-1.5 bg-blue-900/30 border border-blue-700/50 text-blue-300 text-xs font-semibold px-3 py-1 rounded-full">
@@ -95,29 +105,38 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
         </div>
 
         {/* Active drafter banner */}
-        {currentPickerId && (
-          <div className={`mb-6 rounded-xl p-4 text-center border ${
-            isMyParallelTurn
-              ? 'bg-cartola-green/10 border-cartola-green'
+        <div className={`mb-6 rounded-xl p-4 text-center border ${
+          isMyParallelTurn
+            ? 'bg-cartola-green/10 border-cartola-green'
+            : activeDraftingName
+              ? 'bg-orange-900/20 border-orange-700'
               : 'bg-blue-900/20 border-blue-700'
-          }`}>
-            {isMyParallelTurn ? (
-              <>
-                <p className="text-cartola-gold font-bold text-lg mb-3">É sua vez de draftar!</p>
-                <button
-                  onClick={handleStartMyTurn}
-                  className="btn-primary text-base px-8 py-3"
-                >
-                  🚀 Iniciar meu Draft
-                </button>
-              </>
-            ) : (
-              <p className="text-gray-300">
-                Aguardando <strong className="text-white">{parallelCurrentDrafter?.name || '...'}</strong> completar seu draft...
+        }`}>
+          {isMyParallelTurn ? (
+            <>
+              <p className="text-cartola-gold font-bold text-lg mb-3">É sua vez de draftar!</p>
+              <button
+                onClick={handleStartMyTurn}
+                className="btn-primary text-base px-8 py-3"
+              >
+                🚀 Iniciar meu Draft
+              </button>
+            </>
+          ) : activeDraftingName ? (
+            <div>
+              <p className="text-orange-300 font-semibold">
+                🔄 {activeDraftingName} está draftando agora...
               </p>
-            )}
-          </div>
-        )}
+              <p className="text-gray-500 text-xs mt-1">Aguarde sua vez</p>
+            </div>
+          ) : currentPickerId ? (
+            <p className="text-gray-300">
+              Aguardando <strong className="text-white">{parallelCurrentDrafter?.name || '...'}</strong> iniciar seu draft...
+            </p>
+          ) : (
+            <p className="text-gray-500">Aguardando próxima fase...</p>
+          )}
+        </div>
 
         {/* Pick counts per participant */}
         <div className="card">

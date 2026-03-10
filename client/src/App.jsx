@@ -188,9 +188,12 @@ export default function App() {
     return () => socket.off('room_state', onRoomState);
   }, []);
 
-  // Parallel mode: when it's done, go back to lobby
+  // Parallel mode: when drafter finishes their turn, go back to lobby
   useEffect(() => {
     const onParallelTurnDone = () => {
+      setDraftData(null);
+      setPage('lobby');
+      // Re-fetch room state so lobby shows correct waiting state
       const session = readSession();
       if (session?.roomCode && session?.participantId) {
         socket.emit('reconnect_participant', {
@@ -198,8 +201,6 @@ export default function App() {
           participantId: session.participantId,
         });
       }
-      setDraftData(null);
-      setPage('lobby');
     };
     socket.on('parallel_turn_done', onParallelTurnDone);
     return () => socket.off('parallel_turn_done', onParallelTurnDone);
@@ -292,6 +293,7 @@ export default function App() {
             setLobbyState(null);
             window.history.replaceState(null, '', '/');
           }}
+          onGoHome={() => setPage('home')}
         />
       )}
 
@@ -304,6 +306,7 @@ export default function App() {
             setDraftData(null);
             setPage('lobby');
           }}
+          onGoHome={() => setPage('home')}
         />
       )}
 

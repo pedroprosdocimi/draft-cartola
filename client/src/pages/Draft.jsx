@@ -16,7 +16,7 @@ const FORMATIONS_CLIENT = {
 const POSITION_LABELS = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA', 21: 'DEF RES', 22: 'MEI RES', 23: 'ATA RES' };
 const BENCH_SLOT_IDS = [21, 22, 23];
 
-export default function Draft({ roomCode, participantId, initialData, onParallelTurnDone }) {
+export default function Draft({ roomCode, participantId, initialData, onParallelTurnDone, onGoHome }) {
   const [mobileTab, setMobileTab] = useState('status'); // 'order' | 'status' | 'team'
   const clubs = useRef(initialData.clubs || {}).current;        // stable, never changes
   const clubMatches = useRef(initialData.clubMatches || {}).current; // stable, never changes
@@ -359,6 +359,15 @@ export default function Draft({ roomCode, participantId, initialData, onParallel
       {/* Top bar */}
       <div className="bg-gray-900 border-b border-gray-800 px-4 py-2 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2 flex-wrap">
+          {mode === 'parallel' && onGoHome && (
+            <button
+              onClick={onGoHome}
+              className="text-xs text-gray-500 hover:text-white transition-colors mr-1"
+              title="Voltar ao início (você pode retornar)"
+            >
+              ← Home
+            </button>
+          )}
           <span className="font-bold text-white">⚽ Draft</span>
           <span className="text-xs text-gray-500 font-mono">{roomCode}</span>
           {mode === 'parallel' && (

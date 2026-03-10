@@ -12,6 +12,7 @@ const STATUS_LABELS = {
   drafting: 'Em andamento',
   bench_drafting: 'Reservas',
   captain_drafting: 'Capitão',
+  parallel_waiting: 'Paralelo — aguardando',
 };
 
 export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
