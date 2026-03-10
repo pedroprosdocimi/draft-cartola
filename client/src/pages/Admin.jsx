@@ -146,6 +146,12 @@ export default function Admin({ onBack }) {
   const [syncResult, setSyncResult] = useState(null);
   const [scoreSyncResult, setScoreSyncResult] = useState(null);
 
+  // Users / coins management
+  const [users, setUsers] = useState([]);
+  const [coinDelta, setCoinDelta] = useState({});
+  const [adjustingUserId, setAdjustingUserId] = useState(null);
+  const [coinError, setCoinError] = useState(null);
+
   const token = localStorage.getItem('draft_token');
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -153,19 +159,22 @@ export default function Admin({ onBack }) {
     setLoading(true);
     setError(null);
     try {
-      const [playersRes, statusRes, eligibleRes] = await Promise.all([
+      const [playersRes, statusRes, eligibleRes, usersRes] = await Promise.all([
         fetch(`${API_URL}/api/players`, { headers }),
         fetch(`${API_URL}/api/sync/status`, { headers }),
         fetch(`${API_URL}/api/admin/eligible`, { headers }),
+        fetch(`${API_URL}/api/admin/users`, { headers }),
       ]);
       const playersData = await playersRes.json();
       const statusData = await statusRes.json();
       const eligibleData = await eligibleRes.json();
+      const usersData = await usersRes.json();
 
       if (playersData.players) setPlayers(playersData.players);
       if (playersData.clubMatches) setClubMatches(playersData.clubMatches);
       if (statusData.ok !== false) setSyncStatus(statusData);
       if (eligibleData.eligible) setEligibleIds(new Set(eligibleData.eligible));
+      if (usersData.users) setUsers(usersData.users);
     } catch {
       setError('Erro ao carregar dados.');
     } finally {
@@ -174,6 +183,30 @@ export default function Admin({ onBack }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  const handleAdjustCoins = async (userId, delta) => {
+    if (!delta || delta === 0) return;
+    setAdjustingUserId(userId);
+    setCoinError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/users/${userId}/coins`, {
+        method: 'PATCH',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delta })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setUsers(prev => prev.map(u => u.id === userId ? { ...u, coins: data.coins } : u));
+        setCoinDelta(prev => ({ ...prev, [userId]: 0 }));
+      } else {
+        setCoinError(data.error || 'Erro ao ajustar moedas.');
+      }
+    } catch {
+      setCoinError('Erro de conexão.');
+    } finally {
+      setAdjustingUserId(null);
+    }
+  };
 
   const handleSync = async () => {
     setSyncing(true);
@@ -355,6 +388,69 @@ export default function Admin({ onBack }) {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* ── Gerenciamento de Usuários / Moedas ── */}
+      <div className="card mb-6">
+        <h2 className="font-semibold text-gray-300 mb-4 flex items-center gap-2">
+          🪙 Usuários &amp; Moedas
+        </h2>
+        {coinError && (
+          <p className="text-red-400 text-sm mb-3 bg-red-900/20 border border-red-800 rounded px-3 py-1.5">{coinError}</p>
+        )}
+        {users.length === 0 ? (
+          <p className="text-gray-600 text-sm">Nenhum usuário encontrado.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500 border-b border-gray-800">
+                  <th className="pb-2 pr-4 font-medium">Usuário</th>
+                  <th className="pb-2 pr-4 font-medium">Time</th>
+                  <th className="pb-2 pr-4 font-medium text-center">Moedas</th>
+                  <th className="pb-2 font-medium">Ajustar</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800/50">
+                {users.map(u => {
+                  const delta = coinDelta[u.id] ?? 0;
+                  return (
+                    <tr key={u.id}>
+                      <td className="py-2 pr-4">
+                        <span className="text-white font-medium">{u.username}</span>
+                        {u.is_admin && (
+                          <span className="ml-1.5 text-xs text-cartola-gold">admin</span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-4 text-gray-400">{u.nome_time}</td>
+                      <td className="py-2 pr-4 text-center">
+                        <span className="font-mono font-bold text-yellow-300">{u.coins}</span>
+                      </td>
+                      <td className="py-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={delta}
+                            onChange={e => setCoinDelta(prev => ({ ...prev, [u.id]: parseInt(e.target.value) || 0 }))}
+                            className="w-20 bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded px-2 py-1 focus:outline-none focus:border-cartola-green font-mono text-center"
+                            placeholder="0"
+                          />
+                          <button
+                            onClick={() => handleAdjustCoins(u.id, delta)}
+                            disabled={delta === 0 || adjustingUserId === u.id}
+                            className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-40 border border-gray-700 hover:border-cartola-green text-gray-400 hover:text-white"
+                          >
+                            {adjustingUserId === u.id ? '...' : delta >= 0 ? '+ Adicionar' : '− Remover'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* ── Historico de Drafts ── */}

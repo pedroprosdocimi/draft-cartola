@@ -73,7 +73,8 @@ export default function Draft({ roomCode, participantId, initialData }) {
     return ids;
   });
   const [myPicks, setMyPicks] = useState([]);
-  const [timeLeft, setTimeLeft] = useState(15);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [mode] = useState(initialData.mode || 'realtime');
   const [pickNumber, setPickNumber] = useState(() =>
     (initialData.participants || []).reduce((sum, p) => sum + (p.picks || []).length, 0)
   );
@@ -171,7 +172,7 @@ export default function Draft({ roomCode, participantId, initialData }) {
       setPickedIds(prev => new Set([...prev, player.cartola_id]));
       setCurrentPickerId(nextParticipantId);
       setPickNumber(pickNumber);
-      setTimeLeft(15);
+      setTimeLeft(60);
       setLastPick({ participantId: pid, player });
       setParticipants(prev => prev.map(p =>
         p.id === pid ? { ...p, picks: [...(p.picks || []), player] } : p
@@ -195,7 +196,7 @@ export default function Draft({ roomCode, participantId, initialData }) {
       setCurrentPickerId(currentPickerId);
       setOfferedPlayers(null);
       setCurrentPickerPositionId(null);
-      setTimeLeft(15);
+      setTimeLeft(60);
       showNotification('🏃 Segunda fase: Draft de Reservas!', 'info');
     };
 
@@ -207,7 +208,7 @@ export default function Draft({ roomCode, participantId, initialData }) {
         club: clubs[p.club_id] || clubs[String(p.club_id)] || null,
       })));
       setCurrentPickerPositionId(null);
-      setTimeLeft(15);
+      setTimeLeft(60);
       showNotification('👑 Terceira fase: Escolha do Capitão!', 'info');
     };
 
@@ -222,7 +223,7 @@ export default function Draft({ roomCode, participantId, initialData }) {
           ...p,
           club: clubs[p.club_id] || clubs[String(p.club_id)] || null,
         })));
-        setTimeLeft(15);
+        setTimeLeft(60);
       } else {
         setOfferedPlayers(null);
       }
@@ -274,21 +275,65 @@ export default function Draft({ roomCode, participantId, initialData }) {
 
   const remainingOrder = draftOrder.slice(pickNumber);
 
+  // Progress of the current drafter in parallel mode
+  const currentDrafter = participants.find(p => p.id === currentPickerId);
+  const drafterTotalPicks = currentDrafter?.formation
+    ? (phase === 'bench' ? 3 : Object.values(FORMATIONS_CLIENT[currentDrafter.formation] || {}).reduce((a, b) => a + b, 0))
+    : 0;
+  const drafterDonePicks = currentDrafter
+    ? (phase === 'bench'
+        ? (currentDrafter.picks || []).filter(p => BENCH_SLOT_IDS.includes(p.position_id)).length
+        : (currentDrafter.picks || []).filter(p => !BENCH_SLOT_IDS.includes(p.position_id)).length)
+    : 0;
+  const drafterProgressPct = drafterTotalPicks > 0 ? Math.round((drafterDonePicks / drafterTotalPicks) * 100) : 0;
+
+  // Total picks across all participants for status display
+  const totalPicksDone = participants.reduce((sum, p) => sum + (p.picks || []).length, 0);
+  const totalPicksExpected = participants.reduce((p, part) => {
+    const f = FORMATIONS_CLIENT[part.formation];
+    return p + (f ? Object.values(f).reduce((a, b) => a + b, 0) : 0) + 3; // +3 bench
+  }, 0);
+
   let turnText;
   if (isMyTurn) {
-    turnText = phase === 'captain'
-      ? <p className="text-cartola-gold font-semibold">Escolha seu Capitão!</p>
-      : offeredPlayers
-        ? <p className="text-cartola-gold font-semibold">Escolha um dos jogadores!</p>
-        : phase === 'bench'
-          ? <p className="text-cartola-gold font-semibold">Escolha um slot de reserva!</p>
-          : <p className="text-cartola-gold font-semibold">Escolha uma posição!</p>;
+    turnText = (
+      <div className="space-y-1">
+        {phase === 'captain'
+          ? <p className="text-cartola-gold font-semibold">Escolha seu Capitão!</p>
+          : offeredPlayers
+            ? <p className="text-cartola-gold font-semibold">Escolha um dos jogadores!</p>
+            : phase === 'bench'
+              ? <p className="text-cartola-gold font-semibold">Escolha um slot de reserva!</p>
+              : <p className="text-cartola-gold font-semibold">Escolha uma posição!</p>}
+        {mode === 'parallel' && phase !== 'captain' && (
+          <p className="text-xs text-gray-400">
+            Seus picks: {drafterDonePicks}/{drafterTotalPicks}
+          </p>
+        )}
+      </div>
+    );
   } else {
     turnText = (
-      <p className="text-gray-400 text-sm">
-        Aguardando <strong className="text-white">{currentPickerName}</strong>
-        {phase === 'captain' ? ' escolher o capitão...' : offeredPlayers ? ' escolher um jogador...' : phase === 'bench' ? ' escolher um reserva...' : ' escolher uma posição...'}
-      </p>
+      <div className="space-y-3 w-full px-2">
+        <p className="text-gray-400 text-sm">
+          Aguardando <strong className="text-white">{currentPickerName}</strong>
+          {phase === 'captain' ? ' escolher o capitão...' : offeredPlayers ? ' escolher um jogador...' : phase === 'bench' ? ' escolher um reserva...' : ' escolher uma posição...'}
+        </p>
+        {mode === 'parallel' && phase !== 'captain' && drafterTotalPicks > 0 && (
+          <div className="w-full max-w-xs mx-auto">
+            <div className="flex justify-between text-xs text-gray-500 mb-1">
+              <span>{currentPickerName}</span>
+              <span>{drafterDonePicks}/{drafterTotalPicks} picks</span>
+            </div>
+            <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                style={{ width: `${drafterProgressPct}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -307,11 +352,16 @@ export default function Draft({ roomCode, participantId, initialData }) {
 
       {/* Top bar */}
       <div className="bg-gray-900 border-b border-gray-800 px-4 py-2 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="font-bold text-white">⚽ Draft</span>
           <span className="text-xs text-gray-500 font-mono">{roomCode}</span>
-          {phase === 'bench' && (
+          {mode === 'parallel' && (
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-900/50 text-blue-300 border border-blue-700">
+              👤 Paralelo
+            </span>
+          )}
+          {phase === 'bench' && (
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-900/50 text-indigo-300 border border-indigo-700">
               Reservas
             </span>
           )}
@@ -326,7 +376,9 @@ export default function Draft({ roomCode, participantId, initialData }) {
             ? <span className="text-cartola-gold animate-pulse">▶ SUA VEZ</span>
             : <span className="text-gray-400 text-xs sm:text-sm truncate max-w-[120px] sm:max-w-none">Vez de {currentPickerName}</span>}
         </div>
-        <div className="text-xs text-gray-500">Pick #{pickNumber + 1}</div>
+        <div className="text-xs text-gray-500 text-right">
+          <div>{totalPicksDone}/{totalPicksExpected} picks</div>
+        </div>
       </div>
 
       {/* Pick modals — rendered as overlays, outside column layout */}
@@ -380,15 +432,31 @@ export default function Draft({ roomCode, participantId, initialData }) {
 
           <div className="card">
             <h3 className="font-semibold text-gray-300 mb-3 text-sm">Times</h3>
-            <div className="space-y-1">
-              {participants.map(p => (
-                <div key={p.id} className="flex items-center justify-between text-sm">
-                  <span className={p.id === participantId ? 'text-white font-semibold' : 'text-gray-400'}>
-                    {p.name}
-                  </span>
-                  <span className="text-gray-500">{(p.picks || []).length} picks</span>
-                </div>
-              ))}
+            <div className="space-y-2">
+              {participants.map(p => {
+                const f = FORMATIONS_CLIENT[p.formation];
+                const pTotal = f ? Object.values(f).reduce((a, b) => a + b, 0) + 3 : 0;
+                const pDone = (p.picks || []).length;
+                const pct = pTotal > 0 ? Math.round((pDone / pTotal) * 100) : 0;
+                const isCurrent = p.id === currentPickerId;
+                return (
+                  <div key={p.id}>
+                    <div className="flex items-center justify-between text-sm mb-0.5">
+                      <span className={`flex items-center gap-1 ${p.id === participantId ? 'text-white font-semibold' : 'text-gray-400'}`}>
+                        {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-cartola-gold animate-pulse inline-block" />}
+                        {p.name}
+                      </span>
+                      <span className="text-gray-500 text-xs">{pDone}/{pTotal}</span>
+                    </div>
+                    <div className="h-1 bg-gray-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${p.id === participantId ? 'bg-cartola-green' : 'bg-gray-600'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

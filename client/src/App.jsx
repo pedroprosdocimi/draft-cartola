@@ -136,6 +136,10 @@ export default function App() {
       window.history.replaceState(null, '', '/');
     });
 
+    socket.on('coins_updated', ({ coins }) => {
+      setUser(prev => prev ? { ...prev, coins } : prev);
+    });
+
     socket.on('error', ({ message }) => {
       setError(message);
       setLoading(false);
@@ -155,6 +159,7 @@ export default function App() {
       socket.off('draft_started');
       socket.off('draft_complete');
       socket.off('error');
+      socket.off('coins_updated');
     };
   }, []);
 

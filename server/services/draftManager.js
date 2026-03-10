@@ -27,14 +27,16 @@ function generateRoomCode() {
   return code;
 }
 
-async function createRoom(participantName, socketId) {
+async function createRoom(participantName, socketId, entryFee = 0) {
   const roomCode = generateRoomCode();
   const participantId = uuidv4();
+  const fee = Math.max(0, parseInt(entryFee) || 0);
 
   const room = {
     code: roomCode,
     status: 'lobby',
     adminId: participantId,
+    entry_fee: fee,
     participants: new Map([[participantId, {
       id: participantId,
       name: participantName,
@@ -59,8 +61,8 @@ async function createRoom(participantName, socketId) {
   rooms.set(roomCode, room);
 
   await pool.query(
-    `INSERT INTO draft_sessions (id, admin_id, created_at, status) VALUES ($1, $2, $3, 'lobby')`,
-    [roomCode, participantId, new Date().toISOString()]
+    `INSERT INTO draft_sessions (id, admin_id, created_at, status, entry_fee) VALUES ($1, $2, $3, 'lobby', $4)`,
+    [roomCode, participantId, new Date().toISOString(), fee]
   );
   await pool.query(
     `INSERT INTO draft_participants (id, session_id, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING`,
@@ -144,6 +146,16 @@ function getBenchNeededSlots(participant) {
   return BENCH_SLOT_IDS.filter(id => !filledSlots.has(id));
 }
 
+function buildParallelOrder(participantIds, formations) {
+  const order = [];
+  for (const id of participantIds) {
+    const f = formations[id];
+    const total = f ? Object.values(FORMATIONS[f]).reduce((a, b) => a + b, 0) : 11;
+    for (let i = 0; i < total; i++) order.push(id);
+  }
+  return order;
+}
+
 function buildDraftOrder(participantIds, formations) {
   const maxRounds = Math.max(...participantIds.map(id => {
     const f = formations[id];
@@ -169,7 +181,7 @@ function buildSnakeOrder(participantIds, rounds) {
 
 // ── draft start ───────────────────────────────────────────────────────────────
 
-async function startDraft(roomCode, players, clubs, clubMatches) {
+async function startDraft(roomCode, players, clubs, clubMatches, mode = 'realtime') {
   const room = rooms.get(roomCode);
   if (!room) return { error: 'Sala não encontrada.' };
   if (room.status !== 'lobby') return { error: 'Draft já iniciado.' };
@@ -188,6 +200,7 @@ async function startDraft(roomCode, players, clubs, clubMatches) {
   room.clubs = clubs;
   room.clubMatches = clubMatches || {};
   room.status = 'drafting';
+  room.mode = mode;
 
   // Shuffle participants for pick order
   const participantIds = [...room.participants.keys()];
@@ -201,14 +214,16 @@ async function startDraft(roomCode, players, clubs, clubMatches) {
   });
 
   const formations = Object.fromEntries([...room.participants.entries()].map(([id, p]) => [id, p.formation]));
-  room.draftOrder = buildDraftOrder(participantIds, formations);
+  room.draftOrder = mode === 'parallel'
+    ? buildParallelOrder(participantIds, formations)
+    : buildDraftOrder(participantIds, formations);
   room.currentPickIndex = 0;
   room.pickNumber = 0;
 
   // Persist draft start
   await pool.query(
-    `UPDATE draft_sessions SET status = 'drafting', draft_order = $1, current_pick_index = 0, pick_number = 0 WHERE id = $2`,
-    [JSON.stringify(room.draftOrder), roomCode]
+    `UPDATE draft_sessions SET status = 'drafting', draft_order = $1, current_pick_index = 0, pick_number = 0, mode = $3 WHERE id = $2`,
+    [JSON.stringify(room.draftOrder), roomCode, mode]
   );
   for (const [id, p] of room.participants) {
     await pool.query(
@@ -325,7 +340,13 @@ async function startBenchDraft(room, io) {
     (a, b) => (room.participants.get(a).pickOrder || 0) - (room.participants.get(b).pickOrder || 0)
   );
 
-  room.draftOrder = buildSnakeOrder(participantIds, 3);
+  if (room.mode === 'parallel') {
+    const order = [];
+    for (const id of participantIds) order.push(id, id, id);
+    room.draftOrder = order;
+  } else {
+    room.draftOrder = buildSnakeOrder(participantIds, 3);
+  }
   room.currentPickIndex = 0;
   room.status = 'bench_drafting';
 
@@ -579,7 +600,7 @@ async function autoPickForParticipant(room, participantId, io) {
 
 function startTimer(room, io) {
   if (room.timer) clearInterval(room.timer);
-  let timeLeft = 15;
+  let timeLeft = 60;
 
   room.timer = setInterval(() => {
     timeLeft--;
@@ -709,6 +730,8 @@ async function restoreRoomsFromDB() {
       code: session.id,
       status: session.status,
       adminId: session.admin_id,
+      entry_fee: session.entry_fee || 0,
+      mode: session.mode || 'realtime',
       participants: participantsMap,
       players: draftPlayers,
       allPlayers,
@@ -741,11 +764,29 @@ function getRoomState(roomCode) {
 
   const phaseMap = { bench_drafting: 'bench', captain_drafting: 'captain' };
 
+  // Progress of current drafter (for parallel mode display)
+  let currentDrafterProgress = null;
+  const currentPid = getCurrentPicker(room);
+  if (currentPid && room.mode === 'parallel') {
+    const cp = room.participants.get(currentPid);
+    if (cp?.formation) {
+      const isbench = room.status === 'bench_drafting';
+      const total = isbench ? 3 : Object.values(FORMATIONS[cp.formation]).reduce((a, b) => a + b, 0);
+      const done = isbench
+        ? cp.picks.filter(pk => BENCH_SLOT_IDS.includes(pk.position_id)).length
+        : cp.picks.filter(pk => !BENCH_SLOT_IDS.includes(pk.position_id)).length;
+      currentDrafterProgress = { done, total };
+    }
+  }
+
   return {
     roomCode: room.code,
     status: room.status,
     phase: phaseMap[room.status] || 'main',
     adminId: room.adminId,
+    entry_fee: room.entry_fee || 0,
+    mode: room.mode || 'realtime',
+    currentDrafterProgress,
     participants: [...room.participants.values()].map(p => ({
       id: p.id,
       name: p.name,

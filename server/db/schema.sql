@@ -6,7 +6,8 @@ CREATE TABLE IF NOT EXISTS users (
   nome_time TEXT NOT NULL,
   senha_hash TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  is_admin BOOLEAN NOT NULL DEFAULT false
+  is_admin BOOLEAN NOT NULL DEFAULT false,
+  coins INTEGER NOT NULL DEFAULT 100
 );
 
 CREATE TABLE IF NOT EXISTS rounds (
@@ -73,7 +74,8 @@ CREATE TABLE IF NOT EXISTS draft_sessions (
   status TEXT DEFAULT 'lobby',
   draft_order TEXT,
   current_pick_index INTEGER DEFAULT 0,
-  pick_number INTEGER DEFAULT 0
+  pick_number INTEGER DEFAULT 0,
+  entry_fee INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS draft_participants (

@@ -17,6 +17,7 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
     const me = initialState?.participants?.find(p => p.id === participantId);
     return me?.formation || null;
   });
+  const [draftMode, setDraftMode] = useState('realtime');
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -35,7 +36,7 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
   };
 
   const handleStartDraft = () => {
-    socket.emit('start_draft', { roomCode, participantId });
+    socket.emit('start_draft', { roomCode, participantId, mode: draftMode });
   };
 
   const handleLeave = () => {
@@ -76,6 +77,11 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
           </button>
           <span className="text-xs text-gray-500">{copied ? '✓ Copiado!' : 'clique para copiar'}</span>
         </div>
+        {(roomState?.entry_fee ?? 0) > 0 && (
+          <div className="mt-3 inline-flex items-center gap-1.5 bg-yellow-900/30 border border-yellow-700/50 text-yellow-300 text-sm font-semibold px-3 py-1 rounded-full">
+            🪙 Taxa de entrada: {roomState.entry_fee} moedas
+          </div>
+        )}
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
@@ -143,7 +149,39 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
       {/* Start button */}
       <div className="mt-8 text-center">
         {isAdmin ? (
-          <div>
+          <div className="space-y-4">
+            {/* Mode selector */}
+            <div>
+              <p className="text-sm text-gray-400 mb-2">Modo do draft</p>
+              <div className="inline-flex bg-gray-800 rounded-lg p-1 gap-1">
+                <button
+                  onClick={() => setDraftMode('realtime')}
+                  className={`px-5 py-2.5 rounded-md text-sm font-medium transition-all ${
+                    draftMode === 'realtime'
+                      ? 'bg-cartola-green text-white shadow'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  ⚡ Tempo Real
+                </button>
+                <button
+                  onClick={() => setDraftMode('parallel')}
+                  className={`px-5 py-2.5 rounded-md text-sm font-medium transition-all ${
+                    draftMode === 'parallel'
+                      ? 'bg-blue-600 text-white shadow'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  👤 Paralelo
+                </button>
+              </div>
+              <p className="text-xs text-gray-600 mt-1.5">
+                {draftMode === 'realtime'
+                  ? 'Todos escolhem em ordem cobra, alternando a cada pick'
+                  : 'Cada jogador faz todos os seus picks de uma vez, um por vez'}
+              </p>
+            </div>
+
             <button
               onClick={handleStartDraft}
               disabled={!canStart}

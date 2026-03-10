@@ -17,6 +17,7 @@ const STATUS_LABELS = {
 export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
   const [roomCode, setRoomCode] = useState('');
   const [tab, setTab] = useState('create'); // 'create' | 'join' — only admin sees tabs
+  const [entryFee, setEntryFee] = useState(0);
   const [activeDrafts, setActiveDrafts] = useState([]);
   const [historyDrafts, setHistoryDrafts] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -56,12 +57,14 @@ export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
   }, []);
 
   const handleCreate = () => {
-    socket.emit('create_room', { participantName: user.nomeTime });
+    const token = localStorage.getItem('draft_token');
+    socket.emit('create_room', { participantName: user.nomeTime, entryFee, token });
   };
 
   const handleJoin = () => {
     if (roomCode.length < 6) return;
-    socket.emit('join_room', { roomCode: roomCode.trim().toUpperCase(), participantName: user.nomeTime });
+    const token = localStorage.getItem('draft_token');
+    socket.emit('join_room', { roomCode: roomCode.trim().toUpperCase(), participantName: user.nomeTime, token });
   };
 
   return (
@@ -90,6 +93,11 @@ export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
             <button onClick={onLogout} className="text-xs text-gray-600 hover:text-red-400 transition-colors">
               Sair
             </button>
+          </div>
+          <div className="mt-2">
+            <span className="inline-flex items-center gap-1.5 bg-yellow-900/30 border border-yellow-700/50 text-yellow-300 text-sm font-semibold px-3 py-1 rounded-full">
+              🪙 {user.coins ?? 0} moedas
+            </span>
           </div>
         </div>
 
@@ -180,13 +188,44 @@ export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
           {/* Create room — admin only */}
           {user.isAdmin && tab === 'create' && (
             <>
-              <div className="mb-6 p-4 bg-gray-800 rounded-lg text-sm text-gray-400">
+              <div className="mb-4 p-4 bg-gray-800 rounded-lg text-sm text-gray-400">
                 Você entrará na sala como{' '}
                 <span className="text-white font-semibold">{user.nomeTime}</span>.
               </div>
-              <button onClick={handleCreate} className="btn-primary w-full">
-                ✨ Criar Sala
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  🪙 Taxa de entrada (moedas por participante)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    step="5"
+                    value={entryFee}
+                    onChange={e => setEntryFee(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="input-field w-32 text-center font-mono text-lg"
+                  />
+                  <span className="text-gray-500 text-sm">moedas</span>
+                  {entryFee === 0 && <span className="text-xs text-gray-600">(gratuito)</span>}
+                  {entryFee > 0 && (
+                    <span className="text-xs text-yellow-400">
+                      Você também pagará {entryFee} 🪙
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={handleCreate}
+                disabled={entryFee > 0 && (user.coins ?? 0) < entryFee}
+                className="btn-primary w-full disabled:opacity-40"
+              >
+                ✨ Criar Sala{entryFee > 0 ? ` (-${entryFee} 🪙)` : ''}
               </button>
+              {entryFee > 0 && (user.coins ?? 0) < entryFee && (
+                <p className="text-red-400 text-xs mt-2 text-center">
+                  Moedas insuficientes para criar esta sala.
+                </p>
+              )}
             </>
           )}
 

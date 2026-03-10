@@ -345,6 +345,37 @@ router.get('/admin/drafts/:id', async (req, res) => {
   }
 });
 
+// GET /api/admin/users — list all users with coins
+router.get('/admin/users', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, nome, username, nome_time, coins, is_admin, created_at FROM users ORDER BY created_at ASC`
+    );
+    res.json({ users: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/admin/users/:id/coins — add or remove coins from a user
+router.patch('/admin/users/:id/coins', async (req, res) => {
+  const userId = parseInt(req.params.id);
+  const { delta } = req.body; // positive to add, negative to remove
+  if (isNaN(userId) || typeof delta !== 'number') {
+    return res.status(400).json({ error: 'Parâmetros inválidos.' });
+  }
+  try {
+    const result = await pool.query(
+      `UPDATE users SET coins = GREATEST(0, coins + $1) WHERE id = $2 RETURNING coins`,
+      [delta, userId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Usuário não encontrado.' });
+    res.json({ ok: true, coins: result.rows[0].coins });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });

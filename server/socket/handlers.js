@@ -15,33 +15,104 @@ const {
   findRoomBySocket
 } = require('../services/draftManager');
 const { getPlayersAndClubs } = require('../services/cartola');
+const { pool } = require('../db');
+const jwt = require('jsonwebtoken');
+
+const JWT_SECRET = 'draft-cartola-secret-key-2024';
+
+async function getUserFromToken(token) {
+  if (!token) return null;
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    return (await pool.query('SELECT * FROM users WHERE id = $1', [payload.id])).rows[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+async function deductCoins(userId, amount) {
+  const result = await pool.query(
+    `UPDATE users SET coins = coins - $1 WHERE id = $2 AND coins >= $1 RETURNING coins`,
+    [amount, userId]
+  );
+  if (!result.rows.length) return { ok: false };
+  return { ok: true, coins: result.rows[0].coins };
+}
+
+async function refundCoins(userId, amount) {
+  const result = await pool.query(
+    `UPDATE users SET coins = coins + $1 WHERE id = $2 RETURNING coins`,
+    [amount, userId]
+  );
+  return result.rows[0]?.coins ?? null;
+}
 
 module.exports = function registerHandlers(io) {
   io.on('connection', (socket) => {
     console.log(`[socket] connected: ${socket.id}`);
 
-    socket.on('create_room', async ({ participantName }) => {
+    socket.on('create_room', async ({ participantName, entryFee, token }) => {
       if (!participantName?.trim()) {
         return socket.emit('error', { message: 'Nome inválido.' });
       }
-      const { roomCode, participantId } = await createRoom(participantName.trim(), socket.id);
+      const fee = Math.max(0, parseInt(entryFee) || 0);
+
+      let userId = null;
+      if (fee > 0) {
+        const user = await getUserFromToken(token);
+        if (!user) return socket.emit('error', { message: 'Token inválido para cobrar entrada.' });
+        if (user.coins < fee) {
+          return socket.emit('error', { message: `Moedas insuficientes. Você tem ${user.coins} 🪙, precisa de ${fee} 🪙.` });
+        }
+        const deduct = await deductCoins(user.id, fee);
+        if (!deduct.ok) return socket.emit('error', { message: `Moedas insuficientes.` });
+        userId = user.id;
+        socket.emit('coins_updated', { coins: deduct.coins });
+      }
+
+      const { roomCode, participantId } = await createRoom(participantName.trim(), socket.id, fee);
       socket.join(roomCode);
       socket.emit('room_joined', { roomCode, participantId, isAdmin: true });
       io.to(roomCode).emit('room_state', getRoomState(roomCode));
-      console.log(`[room] created: ${roomCode} by ${participantName}`);
+      console.log(`[room] created: ${roomCode} by ${participantName} (entry_fee=${fee})`);
     });
 
-    socket.on('join_room', async ({ roomCode, participantName }) => {
+    socket.on('join_room', async ({ roomCode, participantName, token }) => {
       if (!roomCode?.trim() || !participantName?.trim()) {
         return socket.emit('error', { message: 'Código ou nome inválido.' });
       }
-      const result = await joinRoom(roomCode.trim().toUpperCase(), participantName.trim(), socket.id);
-      if (result.error) return socket.emit('error', { message: result.error });
+      const code = roomCode.trim().toUpperCase();
+      const room = getRoom(code);
+      if (!room) return socket.emit('error', { message: 'Sala não encontrada.' });
 
-      socket.join(roomCode.toUpperCase());
-      socket.emit('room_joined', { roomCode: roomCode.toUpperCase(), participantId: result.participantId, isAdmin: false });
-      io.to(roomCode.toUpperCase()).emit('room_state', getRoomState(roomCode.toUpperCase()));
-      console.log(`[room] ${participantName} joined: ${roomCode}`);
+      const fee = room.entry_fee || 0;
+      let userId = null;
+
+      if (fee > 0) {
+        const user = await getUserFromToken(token);
+        if (!user) return socket.emit('error', { message: 'Token inválido para cobrar entrada.' });
+        if (user.coins < fee) {
+          return socket.emit('error', { message: `Moedas insuficientes. Você tem ${user.coins} 🪙, precisa de ${fee} 🪙.` });
+        }
+        const deduct = await deductCoins(user.id, fee);
+        if (!deduct.ok) return socket.emit('error', { message: `Moedas insuficientes.` });
+        userId = user.id;
+        socket.emit('coins_updated', { coins: deduct.coins });
+      }
+
+      const result = await joinRoom(code, participantName.trim(), socket.id);
+      if (result.error) {
+        if (fee > 0 && userId) {
+          const refunded = await refundCoins(userId, fee);
+          socket.emit('coins_updated', { coins: refunded });
+        }
+        return socket.emit('error', { message: result.error });
+      }
+
+      socket.join(code);
+      socket.emit('room_joined', { roomCode: code, participantId: result.participantId, isAdmin: false });
+      io.to(code).emit('room_state', getRoomState(code));
+      console.log(`[room] ${participantName} joined: ${code} (fee=${fee})`);
     });
 
     socket.on('leave_room', ({ roomCode, participantId }) => {
@@ -60,7 +131,7 @@ module.exports = function registerHandlers(io) {
       io.to(roomCode).emit('room_state', getRoomState(roomCode));
     });
 
-    socket.on('start_draft', async ({ roomCode, participantId }) => {
+    socket.on('start_draft', async ({ roomCode, participantId, mode }) => {
       const room = getRoom(roomCode);
       if (!room) return socket.emit('error', { message: 'Sala não encontrada.' });
       if (room.adminId !== participantId) return socket.emit('error', { message: 'Apenas o admin pode iniciar.' });
@@ -69,7 +140,7 @@ module.exports = function registerHandlers(io) {
         socket.emit('loading', { message: 'Carregando jogadores do banco local...' });
         const { players, clubs, clubMatches } = await getPlayersAndClubs();
 
-        const result = await startDraft(roomCode, players, clubs, clubMatches);
+        const result = await startDraft(roomCode, players, clubs, clubMatches, mode || 'realtime');
         if (result.error) return socket.emit('error', { message: result.error });
 
         const state = getRoomState(roomCode);
@@ -79,7 +150,8 @@ module.exports = function registerHandlers(io) {
           clubMatches,
           draftOrder: state.draftOrderIds,
           participants: state.participants,
-          currentPickerId: state.currentPickerId
+          currentPickerId: state.currentPickerId,
+          mode: state.mode,
         });
 
         startTimer(room, io);
@@ -142,11 +214,10 @@ module.exports = function registerHandlers(io) {
           currentPickerId: state.currentPickerId,
           currentOptions: state.currentOptions,
           currentPickerPositionId: state.currentPickerPositionId,
+          mode: state.mode,
           phase: 'main'
         });
       } else if (room.status === 'bench_drafting') {
-        // Send phase in draft_started so Draft.jsx initializes correctly without
-        // depending on bench_draft_started (which may arrive before Draft.jsx mounts)
         socket.emit('draft_started', {
           players: room.players,
           clubs: room.clubs,
@@ -156,6 +227,7 @@ module.exports = function registerHandlers(io) {
           currentPickerId: state.currentPickerId,
           currentOptions: state.currentOptions,
           currentPickerPositionId: state.currentPickerPositionId,
+          mode: state.mode,
           phase: 'bench'
         });
       } else if (room.status === 'complete') {

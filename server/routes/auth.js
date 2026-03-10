@@ -21,7 +21,8 @@ function userPayload(user) {
     username: user.username,
     nome: user.nome,
     nomeTime: user.nome_time || user.nomeTime,
-    isAdmin: user.is_admin === true || user.is_admin === 1
+    isAdmin: user.is_admin === true || user.is_admin === 1,
+    coins: user.coins ?? 100
   };
 }
 
