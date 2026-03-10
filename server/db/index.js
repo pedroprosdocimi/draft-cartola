@@ -37,6 +37,7 @@ async function initDb() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS coins INTEGER NOT NULL DEFAULT 100`,
     `ALTER TABLE draft_sessions ADD COLUMN IF NOT EXISTS entry_fee INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE draft_sessions ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'realtime'`,
+    `ALTER TABLE draft_sessions ADD COLUMN IF NOT EXISTS parallel_phase TEXT`,
   ];
   for (const m of migrations) {
     try { await pool.query(m); } catch { /* column already exists */ }

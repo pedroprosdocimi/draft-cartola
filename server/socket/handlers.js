@@ -4,6 +4,7 @@ const {
   leaveRoom,
   setFormation,
   startDraft,
+  startMyTurn,
   pickPosition,
   pickBenchSlot,
   pickPlayer,
@@ -144,18 +145,24 @@ module.exports = function registerHandlers(io) {
         if (result.error) return socket.emit('error', { message: result.error });
 
         const state = getRoomState(roomCode);
-        io.to(roomCode).emit('draft_started', {
-          players,
-          clubs,
-          clubMatches,
-          draftOrder: state.draftOrderIds,
-          participants: state.participants,
-          currentPickerId: state.currentPickerId,
-          mode: state.mode,
-        });
 
-        startTimer(room, io);
-        console.log(`[draft] started in room ${roomCode}`);
+        if (mode === 'parallel') {
+          // Parallel: everyone stays in lobby waiting for their turn
+          io.to(roomCode).emit('room_state', state);
+        } else {
+          io.to(roomCode).emit('draft_started', {
+            players,
+            clubs,
+            clubMatches,
+            draftOrder: state.draftOrderIds,
+            participants: state.participants,
+            currentPickerId: state.currentPickerId,
+            mode: state.mode,
+          });
+          startTimer(room, io);
+        }
+
+        console.log(`[draft] started in room ${roomCode} (mode=${mode || 'realtime'})`);
       } catch (err) {
         console.error('[start_draft] error:', err);
         socket.emit('error', { message: 'Erro ao carregar jogadores. Tente novamente.' });
@@ -186,6 +193,35 @@ module.exports = function registerHandlers(io) {
       if (result.error) return socket.emit('error', { message: result.error });
     });
 
+    // Parallel mode: participant starts their own draft turn
+    socket.on('start_my_turn', async ({ roomCode, participantId }) => {
+      const room = getRoom(roomCode);
+      if (!room) return socket.emit('error', { message: 'Sala não encontrada.' });
+
+      const result = await startMyTurn(roomCode, participantId);
+      if (result.error) return socket.emit('error', { message: result.error });
+
+      const state = getRoomState(roomCode);
+
+      // Notify everyone else (not the drafter) that someone started drafting
+      socket.to(roomCode).emit('room_state', state);
+
+      // Send draft screen only to the current drafter
+      socket.emit('draft_started', {
+        players: room.players,
+        clubs: room.clubs,
+        clubMatches: state.clubMatches,
+        draftOrder: state.draftOrderIds,
+        participants: state.participants,
+        currentPickerId: state.currentPickerId,
+        currentOptions: result.captainOptions || null,
+        mode: state.mode,
+        phase: result.phase,
+      });
+
+      startTimer(room, io);
+    });
+
     socket.on('reconnect_participant', ({ roomCode, participantId }) => {
       const room = getRoom(roomCode);
       if (!room) return socket.emit('error', { message: 'Sala não encontrada.' });
@@ -196,42 +232,51 @@ module.exports = function registerHandlers(io) {
       socket.join(roomCode);
 
       const state = getRoomState(roomCode);
-      socket.emit('room_state', state);
 
-      // Restart timer if the room is in progress but has no running timer
-      // (happens when server restarts and first user reconnects)
-      if ((room.status === 'drafting' || room.status === 'bench_drafting') && !room.timer) {
-        startTimer(room, io);
+      // parallel_waiting: everyone is in the lobby
+      if (room.status === 'parallel_waiting') {
+        socket.emit('room_state', state);
+        return;
       }
 
-      if (room.status === 'drafting') {
-        socket.emit('draft_started', {
-          players: room.players,
-          clubs: room.clubs,
-          clubMatches: state.clubMatches,
-          draftOrder: state.draftOrderIds,
-          participants: state.participants,
-          currentPickerId: state.currentPickerId,
-          currentOptions: state.currentOptions,
-          currentPickerPositionId: state.currentPickerPositionId,
-          mode: state.mode,
-          phase: 'main'
-        });
-      } else if (room.status === 'bench_drafting') {
-        socket.emit('draft_started', {
-          players: room.players,
-          clubs: room.clubs,
-          clubMatches: state.clubMatches,
-          draftOrder: state.draftOrderIds,
-          participants: state.participants,
-          currentPickerId: state.currentPickerId,
-          currentOptions: state.currentOptions,
-          currentPickerPositionId: state.currentPickerPositionId,
-          mode: state.mode,
-          phase: 'bench'
-        });
-      } else if (room.status === 'complete') {
+      // Restart timer if the room is in progress but has no running timer
+      if ((room.status === 'drafting' || room.status === 'bench_drafting' || room.status === 'captain_drafting') && !room.timer) {
+        // In parallel mode, only restart if it's this participant's turn
+        if (room.mode !== 'parallel' || state.currentPickerId === participantId) {
+          startTimer(room, io);
+        }
+      }
+
+      if (room.status === 'complete') {
         socket.emit('draft_complete', { teams: state.participants });
+        return;
+      }
+
+      // In parallel mode, non-current-picker stays in lobby
+      if (room.mode === 'parallel' && state.currentPickerId !== participantId) {
+        socket.emit('room_state', state);
+        return;
+      }
+
+      // Realtime mode or parallel mode current picker → send draft screen
+      const phaseMap = { drafting: 'main', bench_drafting: 'bench', captain_drafting: 'captain' };
+      const phase = phaseMap[room.status] || 'main';
+
+      if (room.status === 'drafting' || room.status === 'bench_drafting' || room.status === 'captain_drafting') {
+        socket.emit('draft_started', {
+          players: room.players,
+          clubs: room.clubs,
+          clubMatches: state.clubMatches,
+          draftOrder: state.draftOrderIds,
+          participants: state.participants,
+          currentPickerId: state.currentPickerId,
+          currentOptions: state.currentOptions,
+          currentPickerPositionId: state.currentPickerPositionId,
+          mode: state.mode,
+          phase,
+        });
+      } else {
+        socket.emit('room_state', state);
       }
     });
 

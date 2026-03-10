@@ -167,17 +167,42 @@ export default function App() {
   useEffect(() => {
     const onRoomState = (state) => {
       setRoomCode(state.roomCode);
-      setIsAdmin(state.adminId === readSession()?.participantId);
-      if (state.status === 'lobby') {
+      const pid = readSession()?.participantId;
+      setIsAdmin(state.adminId === pid);
+
+      if (state.status === 'lobby' || state.status === 'parallel_waiting') {
         setLobbyState(state);
         setPage('lobby');
       } else if (state.status === 'drafting' || state.status === 'bench_drafting' || state.status === 'captain_drafting') {
-        setDraftData(state);
-        setPage('draft');
+        // In parallel mode, non-current-picker stays in lobby
+        if (state.mode === 'parallel' && state.currentPickerId !== pid) {
+          setLobbyState(state);
+          setPage('lobby');
+        } else {
+          setDraftData(state);
+          setPage('draft');
+        }
       }
     };
     socket.on('room_state', onRoomState);
     return () => socket.off('room_state', onRoomState);
+  }, []);
+
+  // Parallel mode: when it's done, go back to lobby
+  useEffect(() => {
+    const onParallelTurnDone = () => {
+      const session = readSession();
+      if (session?.roomCode && session?.participantId) {
+        socket.emit('reconnect_participant', {
+          roomCode: session.roomCode,
+          participantId: session.participantId,
+        });
+      }
+      setDraftData(null);
+      setPage('lobby');
+    };
+    socket.on('parallel_turn_done', onParallelTurnDone);
+    return () => socket.off('parallel_turn_done', onParallelTurnDone);
   }, []);
 
   const handleLogin = (userData) => {
@@ -271,7 +296,15 @@ export default function App() {
       )}
 
       {page === 'draft' && draftData && (
-        <Draft roomCode={roomCode} participantId={participantId} initialData={draftData} />
+        <Draft
+          roomCode={roomCode}
+          participantId={participantId}
+          initialData={draftData}
+          onParallelTurnDone={() => {
+            setDraftData(null);
+            setPage('lobby');
+          }}
+        />
       )}
 
       {page === 'end' && teams && (

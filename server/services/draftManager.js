@@ -55,7 +55,8 @@ async function createRoom(participantName, socketId, entryFee = 0) {
     timer: null,
     pickNumber: 0,
     currentOptions: null,
-    currentPickerPositionId: null
+    currentPickerPositionId: null,
+    parallelPhase: null,
   };
 
   rooms.set(roomCode, room);
@@ -199,8 +200,9 @@ async function startDraft(roomCode, players, clubs, clubMatches, mode = 'realtim
   room.players = probablePlayers.length > 0 ? probablePlayers : players;
   room.clubs = clubs;
   room.clubMatches = clubMatches || {};
-  room.status = 'drafting';
+  room.status = mode === 'parallel' ? 'parallel_waiting' : 'drafting';
   room.mode = mode;
+  room.parallelPhase = mode === 'parallel' ? 'main' : null;
 
   // Shuffle participants for pick order
   const participantIds = [...room.participants.keys()];
@@ -222,8 +224,8 @@ async function startDraft(roomCode, players, clubs, clubMatches, mode = 'realtim
 
   // Persist draft start
   await pool.query(
-    `UPDATE draft_sessions SET status = 'drafting', draft_order = $1, current_pick_index = 0, pick_number = 0, mode = $3 WHERE id = $2`,
-    [JSON.stringify(room.draftOrder), roomCode, mode]
+    `UPDATE draft_sessions SET status = $3, draft_order = $1, current_pick_index = 0, pick_number = 0, mode = $4, parallel_phase = $5 WHERE id = $2`,
+    [JSON.stringify(room.draftOrder), roomCode, room.status, mode, room.parallelPhase]
   );
   for (const [id, p] of room.participants) {
     await pool.query(
@@ -243,6 +245,46 @@ function getStarterOptions(participant) {
   return shuffled.slice(0, 5);
 }
 
+async function startMyTurn(roomCode, participantId) {
+  const room = rooms.get(roomCode);
+  if (!room) return { error: 'Sala não encontrada.' };
+  if (room.status !== 'parallel_waiting') return { error: 'Não é a fase de espera paralela.' };
+
+  const currentPicker = getCurrentPicker(room);
+  if (currentPicker !== participantId) return { error: 'Não é sua vez.' };
+
+  const phase = room.parallelPhase || 'main';
+
+  if (phase === 'captain') {
+    room.status = 'captain_drafting';
+    const participant = room.participants.get(participantId);
+    const captainOptions = getStarterOptions(participant);
+    room.currentOptions = captainOptions;
+    room.currentPickerPositionId = null;
+    await pool.query(
+      `UPDATE draft_sessions SET status = 'captain_drafting' WHERE id = $1`,
+      [roomCode]
+    );
+    return { ok: true, phase, captainOptions };
+  } else if (phase === 'bench') {
+    room.status = 'bench_drafting';
+    room.currentOptions = null;
+    await pool.query(
+      `UPDATE draft_sessions SET status = 'bench_drafting' WHERE id = $1`,
+      [roomCode]
+    );
+    return { ok: true, phase, captainOptions: null };
+  } else {
+    room.status = 'drafting';
+    room.currentOptions = null;
+    await pool.query(
+      `UPDATE draft_sessions SET status = 'drafting' WHERE id = $1`,
+      [roomCode]
+    );
+    return { ok: true, phase, captainOptions: null };
+  }
+}
+
 async function startCaptainDraft(room, io) {
   const participantIds = [...room.participants.keys()].sort(
     (a, b) => (room.participants.get(a).pickOrder || 0) - (room.participants.get(b).pickOrder || 0)
@@ -250,8 +292,21 @@ async function startCaptainDraft(room, io) {
 
   room.draftOrder = participantIds;
   room.currentPickIndex = 0;
-  room.status = 'captain_drafting';
 
+  if (room.mode === 'parallel') {
+    room.status = 'parallel_waiting';
+    room.parallelPhase = 'captain';
+    room.currentOptions = null;
+    await pool.query(
+      `UPDATE draft_sessions SET status = 'parallel_waiting', draft_order = $1, current_pick_index = 0, parallel_phase = 'captain' WHERE id = $2`,
+      [JSON.stringify(room.draftOrder), room.code]
+    );
+    io.to(room.code).emit('room_state', getRoomState(room));
+    console.log(`[draft] parallel captain phase waiting in room ${room.code}`);
+    return;
+  }
+
+  room.status = 'captain_drafting';
   await pool.query(
     `UPDATE draft_sessions SET status = 'captain_drafting', draft_order = $1, current_pick_index = 0 WHERE id = $2`,
     [JSON.stringify(room.draftOrder), room.code]
@@ -295,8 +350,29 @@ async function executeCaptainPick(room, participantId, cartolaId, io) {
       `UPDATE draft_sessions SET completed_at = $1, status = 'complete', round_number = $2 WHERE id = $3`,
       [new Date().toISOString(), roundRow?.round_number || null, room.code]
     );
+    if (room.mode === 'parallel') {
+      const drafterSocket = room.participants.get(participantId)?.socketId;
+      if (drafterSocket) io.to(drafterSocket).emit('parallel_turn_done');
+    }
     io.to(room.code).emit('captain_picked', { participantId, captainId: cartolaId });
     io.to(room.code).emit('draft_complete', { teams: buildTeams(room) });
+    return { ok: true };
+  }
+
+  if (room.mode === 'parallel') {
+    const drafterSocket = room.participants.get(participantId)?.socketId;
+    if (drafterSocket) {
+      io.to(drafterSocket).emit('captain_picked', { participantId, captainId: cartolaId });
+      io.to(drafterSocket).emit('parallel_turn_done');
+    }
+    room.status = 'parallel_waiting';
+    room.parallelPhase = 'captain';
+    room.currentOptions = null;
+    await pool.query(
+      `UPDATE draft_sessions SET status = 'parallel_waiting', parallel_phase = 'captain' WHERE id = $1`,
+      [room.code]
+    );
+    io.to(room.code).emit('room_state', getRoomState(room));
     return { ok: true };
   }
 
@@ -348,15 +424,26 @@ async function startBenchDraft(room, io) {
     room.draftOrder = buildSnakeOrder(participantIds, 3);
   }
   room.currentPickIndex = 0;
-  room.status = 'bench_drafting';
 
+  if (room.mode === 'parallel') {
+    room.status = 'parallel_waiting';
+    room.parallelPhase = 'bench';
+    await pool.query(
+      `UPDATE draft_sessions SET status = 'parallel_waiting', draft_order = $1, current_pick_index = 0, parallel_phase = 'bench' WHERE id = $2`,
+      [JSON.stringify(room.draftOrder), room.code]
+    );
+    io.to(room.code).emit('room_state', getRoomState(room));
+    console.log(`[draft] parallel bench phase waiting in room ${room.code}`);
+    return;
+  }
+
+  room.status = 'bench_drafting';
   await pool.query(
     `UPDATE draft_sessions SET status = 'bench_drafting', draft_order = $1, current_pick_index = 0 WHERE id = $2`,
     [JSON.stringify(room.draftOrder), room.code]
   );
 
   const currentPickerId = getCurrentPicker(room);
-
   io.to(room.code).emit('bench_draft_started', {
     benchPlayers: room.benchPlayers,
     draftOrder: room.draftOrder,
@@ -398,7 +485,10 @@ function pickPosition(roomCode, participantId, positionId, io) {
   room.currentOptions = options;
   room.currentPickerPositionId = positionId;
 
-  io.to(roomCode).emit('position_picked', { participantId, positionId, options });
+  const target = room.mode === 'parallel'
+    ? room.participants.get(participantId)?.socketId
+    : roomCode;
+  if (target) io.to(target).emit('position_picked', { participantId, positionId, options });
   return { ok: true };
 }
 
@@ -434,7 +524,10 @@ function pickBenchSlot(roomCode, participantId, benchSlotId, io) {
   room.currentOptions = options;
   room.currentPickerPositionId = benchSlotId;
 
-  io.to(roomCode).emit('position_picked', { participantId, positionId: benchSlotId, options });
+  const target = room.mode === 'parallel'
+    ? room.participants.get(participantId)?.socketId
+    : roomCode;
+  if (target) io.to(target).emit('position_picked', { participantId, positionId: benchSlotId, options });
   return { ok: true };
 }
 
@@ -501,6 +594,47 @@ async function executePick(room, participant, player, io, options = null) {
 
   const nextPickerId = getCurrentPicker(room);
 
+  // ── Parallel mode ──────────────────────────────────────────────────────────
+  if (room.mode === 'parallel') {
+    const drafterSocket = participant.socketId;
+
+    if (!nextPickerId) {
+      // This phase is fully done — notify drafter, then transition phase
+      if (drafterSocket) io.to(drafterSocket).emit('parallel_turn_done');
+      if (room.status === 'bench_drafting') {
+        await startCaptainDraft(room, io);
+      } else {
+        await startBenchDraft(room, io);
+      }
+      return { ok: true };
+    }
+
+    // Emit pick only to the drafter
+    if (drafterSocket) {
+      io.to(drafterSocket).emit('player_picked', {
+        participantId: participant.id,
+        player: { ...player, position_id: storedPositionId },
+        nextParticipantId: nextPickerId,
+        pickNumber,
+      });
+    }
+
+    if (nextPickerId === participant.id) {
+      // Same person continues their session
+      startTimer(room, io);
+    } else {
+      // New person's turn — send current drafter back to lobby
+      if (drafterSocket) io.to(drafterSocket).emit('parallel_turn_done');
+      room.status = 'parallel_waiting';
+      await pool.query(
+        `UPDATE draft_sessions SET status = 'parallel_waiting' WHERE id = $1`, [room.code]
+      );
+      io.to(room.code).emit('room_state', getRoomState(room));
+    }
+    return { ok: true };
+  }
+
+  // ── Realtime mode ───────────────────────────────────────────────────────────
   if (!nextPickerId) {
     if (room.status === 'bench_drafting') {
       await startCaptainDraft(room, io);
@@ -543,11 +677,14 @@ async function autoPickForParticipant(room, participantId, io) {
   const participant = room.participants.get(participantId);
   if (!participant) return;
 
+  const emitTarget = room.mode === 'parallel' && participant.socketId
+    ? participant.socketId : room.code;
+
   if (room.status === 'captain_drafting') {
     const options = room.currentOptions || [];
     if (!options.length) return;
     const pick = options[Math.floor(Math.random() * options.length)];
-    io.to(room.code).emit('auto_picked', { participantId, player: pick });
+    io.to(emitTarget).emit('auto_picked', { participantId, player: pick });
     await executeCaptainPick(room, participantId, pick.cartola_id, io);
     return;
   }
@@ -555,7 +692,7 @@ async function autoPickForParticipant(room, participantId, io) {
   if (room.currentOptions && room.currentOptions.length > 0) {
     const options = [...room.currentOptions];
     const pick = options[Math.floor(Math.random() * options.length)];
-    io.to(room.code).emit('auto_picked', { participantId, player: pick });
+    io.to(emitTarget).emit('auto_picked', { participantId, player: pick });
     await executePick(room, participant, pick, io, options);
     return;
   }
@@ -573,7 +710,7 @@ async function autoPickForParticipant(room, participantId, io) {
       if (available.length > 0) {
         room.currentPickerPositionId = slotId;
         const pick = available[0];
-        io.to(room.code).emit('auto_picked', { participantId, player: { ...pick, position_id: slotId } });
+        io.to(emitTarget).emit('auto_picked', { participantId, player: { ...pick, position_id: slotId } });
         await executePick(room, participant, pick, io);
         return;
       }
@@ -591,7 +728,7 @@ async function autoPickForParticipant(room, participantId, io) {
     );
     if (available.length > 0) {
       const pick = available[Math.floor(Math.random() * available.length)];
-      io.to(room.code).emit('auto_picked', { participantId, player: pick });
+      io.to(emitTarget).emit('auto_picked', { participantId, player: pick });
       await executePick(room, participant, pick, io);
       return;
     }
@@ -638,7 +775,7 @@ async function restoreRoomsFromDB() {
   const sessions = (await pool.query(
     `SELECT * FROM draft_sessions
      WHERE completed_at IS NULL
-       AND status IN ('drafting', 'bench_drafting', 'captain_drafting')`
+       AND status IN ('drafting', 'bench_drafting', 'captain_drafting', 'parallel_waiting')`
   )).rows;
 
   if (sessions.length === 0) return;
@@ -732,10 +869,12 @@ async function restoreRoomsFromDB() {
       adminId: session.admin_id,
       entry_fee: session.entry_fee || 0,
       mode: session.mode || 'realtime',
+      parallelPhase: session.parallel_phase || null,
       participants: participantsMap,
       players: draftPlayers,
       allPlayers,
-      benchPlayers: (session.status === 'bench_drafting' || session.status === 'captain_drafting') && allPlayers
+      benchPlayers: (['bench_drafting', 'captain_drafting'].includes(session.status) ||
+        (session.status === 'parallel_waiting' && ['bench', 'captain'].includes(session.parallel_phase))) && allPlayers
         ? allPlayers.filter(p => p.status_id !== 5 && !pickedIds.has(p.cartola_id))
         : null,
       clubs,
@@ -758,11 +897,14 @@ async function restoreRoomsFromDB() {
 
 // ── read-only helpers ─────────────────────────────────────────────────────────
 
-function getRoomState(roomCode) {
-  const room = rooms.get(roomCode);
+function getRoomState(roomOrCode) {
+  const room = typeof roomOrCode === 'string' ? rooms.get(roomOrCode) : roomOrCode;
   if (!room) return null;
 
   const phaseMap = { bench_drafting: 'bench', captain_drafting: 'captain' };
+  const phase = room.status === 'parallel_waiting'
+    ? (room.parallelPhase || 'main')
+    : (phaseMap[room.status] || 'main');
 
   // Progress of current drafter (for parallel mode display)
   let currentDrafterProgress = null;
@@ -770,7 +912,8 @@ function getRoomState(roomCode) {
   if (currentPid && room.mode === 'parallel') {
     const cp = room.participants.get(currentPid);
     if (cp?.formation) {
-      const isbench = room.status === 'bench_drafting';
+      const isbench = ['bench_drafting', 'bench'].includes(room.status) ||
+        (room.status === 'parallel_waiting' && room.parallelPhase === 'bench');
       const total = isbench ? 3 : Object.values(FORMATIONS[cp.formation]).reduce((a, b) => a + b, 0);
       const done = isbench
         ? cp.picks.filter(pk => BENCH_SLOT_IDS.includes(pk.position_id)).length
@@ -782,10 +925,11 @@ function getRoomState(roomCode) {
   return {
     roomCode: room.code,
     status: room.status,
-    phase: phaseMap[room.status] || 'main',
+    phase,
     adminId: room.adminId,
     entry_fee: room.entry_fee || 0,
     mode: room.mode || 'realtime',
+    parallelPhase: room.parallelPhase || null,
     currentDrafterProgress,
     participants: [...room.participants.values()].map(p => ({
       id: p.id,
@@ -857,6 +1001,7 @@ module.exports = {
   joinRoom,
   setFormation,
   startDraft,
+  startMyTurn,
   pickPosition,
   pickBenchSlot,
   pickPlayer,
@@ -868,6 +1013,7 @@ module.exports = {
   removeParticipantSocket,
   findRoomBySocket,
   restoreRoomsFromDB,
+  getStarterOptions,
   FORMATIONS,
   BENCH_SLOTS,
   BENCH_SLOT_IDS,

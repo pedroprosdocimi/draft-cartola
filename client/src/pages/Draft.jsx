@@ -16,7 +16,7 @@ const FORMATIONS_CLIENT = {
 const POSITION_LABELS = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA', 21: 'DEF RES', 22: 'MEI RES', 23: 'ATA RES' };
 const BENCH_SLOT_IDS = [21, 22, 23];
 
-export default function Draft({ roomCode, participantId, initialData }) {
+export default function Draft({ roomCode, participantId, initialData, onParallelTurnDone }) {
   const [mobileTab, setMobileTab] = useState('status'); // 'order' | 'status' | 'team'
   const clubs = useRef(initialData.clubs || {}).current;        // stable, never changes
   const clubMatches = useRef(initialData.clubMatches || {}).current; // stable, never changes
@@ -229,7 +229,12 @@ export default function Draft({ roomCode, participantId, initialData }) {
       }
     };
 
+    const onParallelDone = () => {
+      if (onParallelTurnDone) onParallelTurnDone();
+    };
+
     socket.on('draft_started', onDraftStarted);
+    socket.on('parallel_turn_done', onParallelDone);
     socket.on('bench_draft_started', onBenchDraftStarted);
     socket.on('captain_draft_started', onCaptainDraftStarted);
     socket.on('captain_picked', onCaptainPicked);
@@ -241,6 +246,7 @@ export default function Draft({ roomCode, participantId, initialData }) {
 
     return () => {
       socket.off('draft_started', onDraftStarted);
+      socket.off('parallel_turn_done', onParallelDone);
       socket.off('bench_draft_started', onBenchDraftStarted);
       socket.off('captain_draft_started', onCaptainDraftStarted);
       socket.off('captain_picked', onCaptainPicked);
