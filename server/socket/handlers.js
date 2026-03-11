@@ -193,7 +193,7 @@ module.exports = function registerHandlers(io) {
       if (result.error) return socket.emit('error', { message: result.error });
     });
 
-    // Parallel mode: participant starts their own draft turn
+    // Parallel mode: participant clicks "Iniciar meu Draft"
     socket.on('start_my_turn', async ({ roomCode, participantId }) => {
       const room = getRoom(roomCode);
       if (!room) return socket.emit('error', { message: 'Sala não encontrada.' });
@@ -203,10 +203,19 @@ module.exports = function registerHandlers(io) {
 
       const state = getRoomState(roomCode);
 
-      // Notify everyone else (not the drafter) that someone started drafting
-      socket.to(roomCode).emit('room_state', state);
+      if (result.queued) {
+        // Player is waiting in queue — keep them in lobby with position info
+        socket.emit('parallel_queued', {
+          position: result.position,
+          waitingFor: result.waitingFor,
+        });
+        socket.emit('room_state', state);
+        socket.to(roomCode).emit('room_state', state);
+        return;
+      }
 
-      // Send draft screen only to the current drafter
+      // Player starts immediately — notify others, send draft screen to this player
+      socket.to(roomCode).emit('room_state', state);
       socket.emit('draft_started', {
         players: room.players,
         clubs: room.clubs,
@@ -214,9 +223,9 @@ module.exports = function registerHandlers(io) {
         draftOrder: state.draftOrderIds,
         participants: state.participants,
         currentPickerId: state.currentPickerId,
-        currentOptions: result.captainOptions || null,
+        currentOptions: null,
         mode: state.mode,
-        phase: result.phase,
+        phase: 'main',
       });
 
       startTimer(room, io);
