@@ -16,8 +16,11 @@ const FORMATIONS_CLIENT = {
 const POSITION_LABELS = { 1: 'GOL', 2: 'LAT', 3: 'ZAG', 4: 'MEI', 5: 'ATA', 21: 'DEF RES', 22: 'MEI RES', 23: 'ATA RES' };
 const BENCH_SLOT_IDS = [21, 22, 23];
 
-export default function Draft({ roomCode, participantId, initialData, onParallelTurnDone, onGoHome }) {
+export default function Draft({ roomCode, participantId, isAdmin, initialData, onParallelTurnDone, onGoHome }) {
   const [mobileTab, setMobileTab] = useState('status'); // 'order' | 'status' | 'team'
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [adminTab, setAdminTab] = useState('sim'); // 'sim' | 'teams' | 'add'
+  const [addPick, setAddPick] = useState({ participantId: '', positionId: '', search: '' });
   const clubs = useRef(initialData.clubs || {}).current;        // stable, never changes
   const clubMatches = useRef(initialData.clubMatches || {}).current; // stable, never changes
 
@@ -233,7 +236,17 @@ export default function Draft({ roomCode, participantId, initialData, onParallel
       if (onParallelTurnDone) onParallelTurnDone();
     };
 
+    const onPicksUpdated = ({ participants: updated }) => {
+      setParticipants(updated);
+      setPickedIds(() => {
+        const ids = new Set();
+        for (const p of updated) for (const pick of p.picks || []) ids.add(pick.cartola_id);
+        return ids;
+      });
+    };
+
     socket.on('draft_started', onDraftStarted);
+    socket.on('picks_updated', onPicksUpdated);
     socket.on('parallel_turn_done', onParallelDone);
     socket.on('bench_draft_started', onBenchDraftStarted);
     socket.on('captain_draft_started', onCaptainDraftStarted);
@@ -246,6 +259,7 @@ export default function Draft({ roomCode, participantId, initialData, onParallel
 
     return () => {
       socket.off('draft_started', onDraftStarted);
+      socket.off('picks_updated', onPicksUpdated);
       socket.off('parallel_turn_done', onParallelDone);
       socket.off('bench_draft_started', onBenchDraftStarted);
       socket.off('captain_draft_started', onCaptainDraftStarted);
@@ -278,6 +292,53 @@ export default function Draft({ roomCode, participantId, initialData, onParallel
   const handlePickCaptain = useCallback((cartolaId) => {
     socket.emit('pick_captain', { roomCode, participantId, cartolaId });
   }, [roomCode, participantId]);
+
+  // ── Admin helpers ──────────────────────────────────────────────────────────
+  const handleAdminForcePick = () => socket.emit('admin_force_pick', { roomCode, participantId });
+  const handleAdminSimAll = () => socket.emit('admin_sim_all', { roomCode, participantId });
+  const handleAdminRemovePick = (targetId, cartolaId) =>
+    socket.emit('admin_remove_pick', { roomCode, participantId, targetParticipantId: targetId, cartolaId });
+  const handleAdminAddPick = (cartolaId) => {
+    socket.emit('admin_add_pick', {
+      roomCode, participantId,
+      targetParticipantId: addPick.participantId,
+      cartolaId, positionId: parseInt(addPick.positionId),
+    });
+    setAddPick(prev => ({ ...prev, search: '', positionId: '' }));
+  };
+
+  const getAvailableSlots = (pid) => {
+    const p = participants.find(p => p.id === pid);
+    if (!p?.formation) return [];
+    const slots = [];
+    const formation = FORMATIONS_CLIENT[p.formation] || {};
+    const mainPicks = (p.picks || []).filter(pk => !BENCH_SLOT_IDS.includes(pk.position_id));
+    const counts = {};
+    for (const pk of mainPicks) counts[pk.position_id] = (counts[pk.position_id] || 0) + 1;
+    for (const [posId, required] of Object.entries(formation)) {
+      const remaining = required - (counts[parseInt(posId)] || 0);
+      for (let i = 0; i < remaining; i++)
+        slots.push({ id: parseInt(posId), label: POSITION_LABELS[parseInt(posId)] });
+    }
+    const filledBench = new Set((p.picks || []).filter(pk => BENCH_SLOT_IDS.includes(pk.position_id)).map(pk => pk.position_id));
+    if (!filledBench.has(21)) slots.push({ id: 21, label: 'DEF RES' });
+    if (!filledBench.has(22)) slots.push({ id: 22, label: 'MEI RES' });
+    if (!filledBench.has(23)) slots.push({ id: 23, label: 'ATA RES' });
+    return slots;
+  };
+
+  const getFilteredPlayers = (posId, search) => {
+    const p = parseInt(posId);
+    const allowed = p === 21 ? [2, 3] : p === 22 ? [4] : p === 23 ? [5] : [p];
+    const q = search.toLowerCase();
+    return (initialData.players || [])
+      .filter(pl =>
+        !pickedIds.has(pl.cartola_id) &&
+        allowed.includes(pl.position_id) &&
+        (!q || pl.nickname?.toLowerCase().includes(q) || pl.name?.toLowerCase().includes(q))
+      )
+      .slice(0, 20);
+  };
 
   const remainingOrder = draftOrder.slice(pickNumber);
 
@@ -356,6 +417,130 @@ export default function Draft({ roomCode, participantId, initialData, onParallel
         </div>
       )}
 
+      {/* Admin Modal */}
+      {isAdmin && adminOpen && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setAdminOpen(false)}>
+          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+              <h2 className="font-bold text-white text-sm">🔧 Painel Admin</h2>
+              <button onClick={() => setAdminOpen(false)} className="text-gray-400 hover:text-white text-lg leading-none">✕</button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b border-gray-800">
+              {[['sim', '⚡ Simular'], ['teams', '👥 Times'], ['add', '➕ Adicionar']].map(([id, label]) => (
+                <button key={id} onClick={() => setAdminTab(id)}
+                  className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${adminTab === id ? 'text-white border-b-2 border-orange-500' : 'text-gray-500 hover:text-gray-300'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              {/* Simular */}
+              {adminTab === 'sim' && (
+                <div className="space-y-3">
+                  <p className="text-xs text-gray-500 mb-4">Executa picks automáticos no lugar do jogador atual.</p>
+                  <button onClick={handleAdminForcePick}
+                    className="w-full bg-orange-700 hover:bg-orange-600 text-white text-sm font-medium py-3 rounded-lg transition-colors">
+                    ⚡ Simular próximo pick
+                  </button>
+                  <button onClick={() => { handleAdminSimAll(); setAdminOpen(false); }}
+                    className="w-full bg-red-900 hover:bg-red-800 text-white text-sm font-medium py-3 rounded-lg transition-colors">
+                    ⏩ Simular todos os picks restantes
+                  </button>
+                  <p className="text-xs text-gray-600 text-center">Simular todos fecha o painel e executa em sequência.</p>
+                </div>
+              )}
+
+              {/* Times */}
+              {adminTab === 'teams' && (
+                <div className="space-y-4">
+                  {participants.map(p => (
+                    <div key={p.id} className="bg-gray-800 rounded-lg p-3">
+                      <h3 className="font-semibold text-sm text-white mb-2">
+                        {p.name} <span className="text-gray-500 text-xs">({(p.picks || []).length} picks)</span>
+                      </h3>
+                      {(p.picks || []).length === 0
+                        ? <p className="text-gray-600 text-xs">Nenhum pick ainda</p>
+                        : (p.picks || []).map(pick => (
+                          <div key={pick.cartola_id} className="flex items-center justify-between py-1 border-b border-gray-700/50 last:border-0">
+                            <span className="text-xs text-gray-300">
+                              <span className="text-gray-500 mr-1">[{POSITION_LABELS[pick.position_id]}]</span>
+                              {pick.nickname}
+                            </span>
+                            <button onClick={() => handleAdminRemovePick(p.id, pick.cartola_id)}
+                              className="text-red-500 hover:text-red-400 text-xs ml-2 px-1">✕</button>
+                          </div>
+                        ))
+                      }
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Adicionar pick */}
+              {adminTab === 'add' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">Participante</label>
+                    <select value={addPick.participantId}
+                      onChange={e => setAddPick({ participantId: e.target.value, positionId: '', search: '' })}
+                      className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                      <option value="">Selecione...</option>
+                      {participants.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+
+                  {addPick.participantId && (
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">Posição / Slot disponível</label>
+                      <select value={addPick.positionId}
+                        onChange={e => setAddPick(prev => ({ ...prev, positionId: e.target.value, search: '' }))}
+                        className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                        <option value="">Selecione...</option>
+                        {getAvailableSlots(addPick.participantId).map((s, i) => (
+                          <option key={`${s.id}-${i}`} value={s.id}>{s.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {addPick.positionId && (
+                    <>
+                      <div>
+                        <label className="text-xs text-gray-400 mb-1 block">Buscar jogador</label>
+                        <input type="text" value={addPick.search}
+                          onChange={e => setAddPick(prev => ({ ...prev, search: e.target.value }))}
+                          placeholder="Nome do jogador..."
+                          className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm placeholder-gray-600" />
+                      </div>
+                      <div className="space-y-1 max-h-48 overflow-y-auto">
+                        {getFilteredPlayers(addPick.positionId, addPick.search).map(pl => (
+                          <div key={pl.cartola_id} className="flex items-center justify-between bg-gray-800 px-3 py-2 rounded text-sm">
+                            <span className="text-gray-200">
+                              {pl.nickname}
+                              <span className="text-gray-500 text-xs ml-1">({POSITION_LABELS[pl.position_id]} · {pl.average_score?.toFixed(1) || '-'}pts)</span>
+                            </span>
+                            <button onClick={() => handleAdminAddPick(pl.cartola_id)}
+                              className="text-cartola-green hover:text-green-400 text-xs font-semibold ml-2">
+                              + Add
+                            </button>
+                          </div>
+                        ))}
+                        {getFilteredPlayers(addPick.positionId, addPick.search).length === 0 && (
+                          <p className="text-gray-600 text-xs text-center py-2">Nenhum jogador disponível</p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top bar */}
       <div className="bg-gray-900 border-b border-gray-800 px-4 py-2 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2 flex-wrap">
@@ -391,8 +576,18 @@ export default function Draft({ roomCode, participantId, initialData, onParallel
             ? <span className="text-cartola-gold animate-pulse">▶ SUA VEZ</span>
             : <span className="text-gray-400 text-xs sm:text-sm truncate max-w-[120px] sm:max-w-none">Vez de {currentPickerName}</span>}
         </div>
-        <div className="text-xs text-gray-500 text-right">
-          <div>{totalPicksDone}/{totalPicksExpected} picks</div>
+        <div className="flex items-center gap-2">
+          <div className="text-xs text-gray-500 text-right">
+            <div>{totalPicksDone}/{totalPicksExpected} picks</div>
+          </div>
+          {isAdmin && (
+            <button
+              onClick={() => setAdminOpen(true)}
+              className="text-xs text-orange-400 hover:text-orange-300 border border-orange-800/60 px-2 py-1 rounded transition-colors"
+            >
+              🔧
+            </button>
+          )}
         </div>
       </div>
 

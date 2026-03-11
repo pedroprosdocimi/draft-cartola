@@ -302,6 +302,7 @@ export default function App() {
         <Draft
           roomCode={roomCode}
           participantId={participantId}
+          isAdmin={isAdmin}
           initialData={draftData}
           onParallelTurnDone={() => {
             setDraftData(null);

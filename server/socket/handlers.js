@@ -13,7 +13,11 @@ const {
   getRoom,
   startTimer,
   removeParticipantSocket,
-  findRoomBySocket
+  findRoomBySocket,
+  adminForcePick,
+  adminSimAll,
+  adminRemovePick,
+  adminAddPick,
 } = require('../services/draftManager');
 const { getPlayersAndClubs } = require('../services/cartola');
 const { pool } = require('../db');
@@ -287,6 +291,27 @@ module.exports = function registerHandlers(io) {
       } else {
         socket.emit('room_state', state);
       }
+    });
+
+    // ── Admin actions ──────────────────────────────────────────────────────────
+    socket.on('admin_force_pick', async ({ roomCode, participantId }) => {
+      const result = await adminForcePick(roomCode, participantId, io);
+      if (result.error) return socket.emit('error', { message: result.error });
+    });
+
+    socket.on('admin_sim_all', async ({ roomCode, participantId }) => {
+      const result = await adminSimAll(roomCode, participantId, io);
+      if (result.error) return socket.emit('error', { message: result.error });
+    });
+
+    socket.on('admin_remove_pick', async ({ roomCode, participantId, targetParticipantId, cartolaId }) => {
+      const result = await adminRemovePick(roomCode, participantId, targetParticipantId, cartolaId, io);
+      if (result.error) return socket.emit('error', { message: result.error });
+    });
+
+    socket.on('admin_add_pick', async ({ roomCode, participantId, targetParticipantId, cartolaId, positionId }) => {
+      const result = await adminAddPick(roomCode, participantId, targetParticipantId, cartolaId, positionId, io);
+      if (result.error) return socket.emit('error', { message: result.error });
     });
 
     socket.on('disconnect', () => {

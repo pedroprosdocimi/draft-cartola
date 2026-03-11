@@ -1096,6 +1096,97 @@ function findRoomBySocket(socketId) {
   return null;
 }
 
+// ── admin actions ─────────────────────────────────────────────────────────────
+
+async function adminForcePick(roomCode, adminId, io) {
+  const room = rooms.get(roomCode);
+  if (!room) return { error: 'Sala não encontrada.' };
+  if (room.adminId !== adminId) return { error: 'Acesso negado.' };
+  if (['lobby', 'parallel_waiting', 'complete'].includes(room.status)) {
+    return { error: 'Nenhum pick em andamento.' };
+  }
+  const pickerId = getCurrentPicker(room);
+  if (!pickerId) return { error: 'Nenhum jogador na vez.' };
+  if (room.timer) { clearInterval(room.timer); room.timer = null; }
+  await autoPickForParticipant(room, pickerId, io);
+  return { ok: true };
+}
+
+async function adminSimAll(roomCode, adminId, io) {
+  const room = rooms.get(roomCode);
+  if (!room) return { error: 'Sala não encontrada.' };
+  if (room.adminId !== adminId) return { error: 'Acesso negado.' };
+
+  for (let i = 0; i < 300; i++) {
+    if (['complete', 'parallel_waiting', 'lobby'].includes(room.status)) break;
+    if (room.timer) { clearInterval(room.timer); room.timer = null; }
+    const pickerId = getCurrentPicker(room);
+    if (!pickerId) break;
+    await autoPickForParticipant(room, pickerId, io);
+    if (room.timer) { clearInterval(room.timer); room.timer = null; }
+    await new Promise(r => setTimeout(r, 50));
+  }
+  return { ok: true };
+}
+
+async function adminRemovePick(roomCode, adminId, targetParticipantId, cartolaId, io) {
+  const room = rooms.get(roomCode);
+  if (!room) return { error: 'Sala não encontrada.' };
+  if (room.adminId !== adminId) return { error: 'Acesso negado.' };
+
+  const participant = room.participants.get(targetParticipantId);
+  if (!participant) return { error: 'Participante não encontrado.' };
+
+  const idx = participant.picks.findIndex(p => p.cartola_id === cartolaId);
+  if (idx === -1) return { error: 'Pick não encontrado.' };
+
+  participant.picks.splice(idx, 1);
+  room.pickedIds.delete(cartolaId);
+  if (participant.captainId === cartolaId) participant.captainId = null;
+
+  await pool.query(
+    `DELETE FROM draft_picks WHERE session_id = $1 AND participant_id = $2 AND cartola_id = $3`,
+    [roomCode, targetParticipantId, cartolaId]
+  );
+
+  const state = getRoomState(room);
+  io.to(roomCode).emit('picks_updated', { participants: state.participants });
+  return { ok: true };
+}
+
+async function adminAddPick(roomCode, adminId, targetParticipantId, cartolaId, positionId, io) {
+  const room = rooms.get(roomCode);
+  if (!room) return { error: 'Sala não encontrada.' };
+  if (room.adminId !== adminId) return { error: 'Acesso negado.' };
+
+  const participant = room.participants.get(targetParticipantId);
+  if (!participant) return { error: 'Participante não encontrado.' };
+  if (room.pickedIds.has(cartolaId)) return { error: 'Jogador já foi escolhido.' };
+
+  // Find player across all pools
+  const seen = new Set();
+  const pool_list = [...(room.players || []), ...(room.allPlayers || []), ...(room.benchPlayers || [])].filter(p => {
+    if (seen.has(p.cartola_id)) return false;
+    seen.add(p.cartola_id); return true;
+  });
+  const player = pool_list.find(p => p.cartola_id === cartolaId);
+  if (!player) return { error: 'Jogador não encontrado no pool.' };
+
+  room.pickedIds.add(cartolaId);
+  room.pickNumber++;
+  participant.picks.push({ ...player, position_id: positionId, picked_at: new Date().toISOString() });
+
+  await pool.query(
+    `INSERT INTO draft_picks (session_id, participant_id, cartola_id, position_id, overall_pick, picked_at)
+     VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
+    [roomCode, targetParticipantId, cartolaId, positionId, room.pickNumber, new Date().toISOString()]
+  );
+
+  const state = getRoomState(room);
+  io.to(roomCode).emit('picks_updated', { participants: state.participants });
+  return { ok: true };
+}
+
 module.exports = {
   createRoom,
   joinRoom,
@@ -1114,6 +1205,10 @@ module.exports = {
   findRoomBySocket,
   restoreRoomsFromDB,
   getStarterOptions,
+  adminForcePick,
+  adminSimAll,
+  adminRemovePick,
+  adminAddPick,
   FORMATIONS,
   BENCH_SLOTS,
   BENCH_SLOT_IDS,
