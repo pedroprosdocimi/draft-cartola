@@ -24,7 +24,10 @@ function participantPicksDone(participant, phase) {
   return participant.picks.filter(p => !BENCH_SLOT_IDS.includes(p.position_id)).length;
 }
 
+const SPECTATOR_ADMIN_ID = 'SPECTATOR';
+
 export default function Lobby({ roomCode, participantId, isAdmin, initialState, onLeave, onGoHome }) {
+  const isSpectatorAdmin = participantId === SPECTATOR_ADMIN_ID;
   const [roomState, setRoomState] = useState(initialState || null);
   const [selectedFormation, setSelectedFormation] = useState(() => {
     const me = initialState?.participants?.find(p => p.id === participantId);
@@ -88,7 +91,8 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
   };
 
   const allReady = roomState?.participants?.every(p => p.formation);
-  const canStart = isAdmin && allReady && roomState?.participants.length >= 2;
+  const hasEnoughPlayers = (roomState?.participants?.length ?? 0) >= 1;
+  const canStart = isAdmin && allReady && hasEnoughPlayers;
 
   const totalPicks = selectedFormation
     ? Object.values(FORMATION_DETAILS[selectedFormation]).reduce((a, b) => a + b, 0)
@@ -274,45 +278,59 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
                 </span>
               </div>
             ))}
+            {isSpectatorAdmin && (
+              <div className="flex items-center gap-2 bg-blue-900/20 border border-blue-700/40 rounded-lg px-3 py-2">
+                <span className="text-lg">👑</span>
+                <span className="text-blue-300 font-semibold text-sm">Admin (observador)</span>
+              </div>
+            )}
           </div>
-          {roomState?.participants.length < 2 && (
+          {(roomState?.participants.length ?? 0) < 1 && (
             <p className="text-gray-600 text-sm mt-3 text-center">
-              Compartilhe o código para outros entrarem
+              Compartilhe o código para os participantes entrarem
             </p>
           )}
         </div>
 
-        {/* Formation Picker */}
-        <div className="card">
-          <h2 className="text-lg font-semibold mb-4 text-gray-300">Escolha sua Formação</h2>
-          <div className="space-y-2">
-            {FORMATIONS.map(f => {
-              const details = FORMATION_DETAILS[f];
-              const total = Object.values(details).reduce((a, b) => a + b, 0);
-              return (
-                <button
-                  key={f}
-                  onClick={() => handleFormation(f)}
-                  className={`w-full text-left px-4 py-3 rounded-lg border transition-all ${
-                    selectedFormation === f
-                      ? 'border-cartola-green bg-cartola-green/20 text-white'
-                      : 'border-gray-700 hover:border-gray-600 text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono font-bold text-lg">{f}</span>
-                    <span className="text-xs text-gray-500">{total} picks</span>
-                  </div>
-                  <div className="flex gap-2 mt-1 text-xs text-gray-500">
-                    {Object.entries(details).filter(([, v]) => v > 0).map(([pos, count]) => (
-                      <span key={pos}>{count}×{pos}</span>
-                    ))}
-                  </div>
-                </button>
-              );
-            })}
+        {/* Formation Picker — hidden for spectator admin */}
+        {!isSpectatorAdmin ? (
+          <div className="card">
+            <h2 className="text-lg font-semibold mb-4 text-gray-300">Escolha sua Formação</h2>
+            <div className="space-y-2">
+              {FORMATIONS.map(f => {
+                const details = FORMATION_DETAILS[f];
+                const total = Object.values(details).reduce((a, b) => a + b, 0);
+                return (
+                  <button
+                    key={f}
+                    onClick={() => handleFormation(f)}
+                    className={`w-full text-left px-4 py-3 rounded-lg border transition-all ${
+                      selectedFormation === f
+                        ? 'border-cartola-green bg-cartola-green/20 text-white'
+                        : 'border-gray-700 hover:border-gray-600 text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-lg">{f}</span>
+                      <span className="text-xs text-gray-500">{total} picks</span>
+                    </div>
+                    <div className="flex gap-2 mt-1 text-xs text-gray-500">
+                      {Object.entries(details).filter(([, v]) => v > 0).map(([pos, count]) => (
+                        <span key={pos}>{count}×{pos}</span>
+                      ))}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="card flex flex-col items-center justify-center text-center py-8">
+            <div className="text-4xl mb-3">👁️</div>
+            <p className="text-gray-300 font-semibold">Você está como observador</p>
+            <p className="text-gray-600 text-sm mt-1">Gerencie a sala sem participar do draft</p>
+          </div>
+        )}
       </div>
 
       {/* Start button */}
@@ -356,16 +374,20 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
               disabled={!canStart}
               className="btn-primary text-lg px-10 py-4 disabled:opacity-40"
             >
-              {canStart ? '🚀 Iniciar Draft' : allReady ? 'Aguardando mais participantes...' : 'Aguardando todos escolherem formação...'}
+              {canStart
+                ? '🚀 Iniciar Draft'
+                : !hasEnoughPlayers
+                  ? 'Aguardando participantes...'
+                  : 'Aguardando todos escolherem formação...'}
             </button>
-            {!allReady && roomState?.participants.length >= 2 && (
+            {!allReady && hasEnoughPlayers && (
               <p className="text-gray-500 text-sm mt-2">Todos os participantes precisam escolher uma formação</p>
             )}
           </div>
         ) : (
           <div className="card inline-block px-8 py-4">
             <p className="text-gray-400">
-              {allReady && roomState?.participants.length >= 2
+              {allReady && hasEnoughPlayers
                 ? '✅ Tudo pronto! Aguardando o admin iniciar...'
                 : 'Aguardando todos escolherem formação...'}
             </p>

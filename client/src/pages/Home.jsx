@@ -19,6 +19,7 @@ export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
   const [roomCode, setRoomCode] = useState('');
   const [tab, setTab] = useState('create'); // 'create' | 'join' — only admin sees tabs
   const [entryFee, setEntryFee] = useState(0);
+  const [wantToPlay, setWantToPlay] = useState(true);
   const [activeDrafts, setActiveDrafts] = useState([]);
   const [historyDrafts, setHistoryDrafts] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -59,7 +60,7 @@ export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
 
   const handleCreate = () => {
     const token = localStorage.getItem('draft_token');
-    socket.emit('create_room', { participantName: user.nomeTime, entryFee, token });
+    socket.emit('create_room', { participantName: user.nomeTime, entryFee, token, spectate: !wantToPlay });
   };
 
   const handleJoin = () => {
@@ -189,10 +190,34 @@ export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
           {/* Create room — admin only */}
           {user.isAdmin && tab === 'create' && (
             <>
-              <div className="mb-4 p-4 bg-gray-800 rounded-lg text-sm text-gray-400">
-                Você entrará na sala como{' '}
-                <span className="text-white font-semibold">{user.nomeTime}</span>.
+              {/* Want to play toggle */}
+              <div className="mb-4">
+                <p className="text-sm font-medium text-gray-400 mb-2">Participação</p>
+                <div className="inline-flex bg-gray-800 rounded-lg p-1 gap-1">
+                  <button
+                    onClick={() => setWantToPlay(true)}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                      wantToPlay ? 'bg-cartola-green text-white shadow' : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    ⚽ Quero jogar
+                  </button>
+                  <button
+                    onClick={() => setWantToPlay(false)}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                      !wantToPlay ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    👁️ Só observar
+                  </button>
+                </div>
+                <p className="text-xs text-gray-600 mt-1.5">
+                  {wantToPlay
+                    ? `Você entrará como ${user.nomeTime} e participará do draft`
+                    : 'Você administra a sala mas não drafta'}
+                </p>
               </div>
+
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-400 mb-2">
                   🪙 Taxa de entrada (moedas por participante)
@@ -208,7 +233,7 @@ export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
                   />
                   <span className="text-gray-500 text-sm">moedas</span>
                   {entryFee === 0 && <span className="text-xs text-gray-600">(gratuito)</span>}
-                  {entryFee > 0 && (
+                  {entryFee > 0 && wantToPlay && (
                     <span className="text-xs text-yellow-400">
                       Você também pagará {entryFee} 🪙
                     </span>
@@ -217,12 +242,12 @@ export default function Home({ user, onLogout, onGoAdmin, onRejoin }) {
               </div>
               <button
                 onClick={handleCreate}
-                disabled={entryFee > 0 && (user.coins ?? 0) < entryFee}
+                disabled={wantToPlay && entryFee > 0 && (user.coins ?? 0) < entryFee}
                 className="btn-primary w-full disabled:opacity-40"
               >
-                ✨ Criar Sala{entryFee > 0 ? ` (-${entryFee} 🪙)` : ''}
+                ✨ Criar Sala{wantToPlay && entryFee > 0 ? ` (-${entryFee} 🪙)` : ''}
               </button>
-              {entryFee > 0 && (user.coins ?? 0) < entryFee && (
+              {wantToPlay && entryFee > 0 && (user.coins ?? 0) < entryFee && (
                 <p className="text-red-400 text-xs mt-2 text-center">
                   Moedas insuficientes para criar esta sala.
                 </p>

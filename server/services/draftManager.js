@@ -27,23 +27,36 @@ function generateRoomCode() {
   return code;
 }
 
-async function createRoom(participantName, socketId, entryFee = 0) {
+const SPECTATOR_ADMIN_ID = 'SPECTATOR';
+
+async function createRoom(participantName, socketId, entryFee = 0, spectate = false) {
   const roomCode = generateRoomCode();
-  const participantId = uuidv4();
   const fee = Math.max(0, parseInt(entryFee) || 0);
 
-  const room = {
-    code: roomCode,
-    status: 'lobby',
-    adminId: participantId,
-    entry_fee: fee,
-    participants: new Map([[participantId, {
+  let participantId;
+  let participantsMap;
+
+  if (spectate) {
+    participantId = SPECTATOR_ADMIN_ID;
+    participantsMap = new Map();
+  } else {
+    participantId = uuidv4();
+    participantsMap = new Map([[participantId, {
       id: participantId,
       name: participantName,
       socketId,
       formation: null,
       picks: []
-    }]]),
+    }]]);
+  }
+
+  const room = {
+    code: roomCode,
+    status: 'lobby',
+    adminId: participantId,
+    adminSocketId: socketId,
+    entry_fee: fee,
+    participants: participantsMap,
     players: null,
     allPlayers: null,
     benchPlayers: null,
@@ -57,7 +70,7 @@ async function createRoom(participantName, socketId, entryFee = 0) {
     currentOptions: null,
     currentPickerPositionId: null,
     parallelPhase: null,
-    parallelQueue: [],   // click order; first entry is currently drafting
+    parallelQueue: [],
   };
 
   rooms.set(roomCode, room);
@@ -66,10 +79,13 @@ async function createRoom(participantName, socketId, entryFee = 0) {
     `INSERT INTO draft_sessions (id, admin_id, created_at, status, entry_fee) VALUES ($1, $2, $3, 'lobby', $4)`,
     [roomCode, participantId, new Date().toISOString(), fee]
   );
-  await pool.query(
-    `INSERT INTO draft_participants (id, session_id, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING`,
-    [participantId, roomCode, participantName]
-  );
+
+  if (!spectate) {
+    await pool.query(
+      `INSERT INTO draft_participants (id, session_id, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING`,
+      [participantId, roomCode, participantName]
+    );
+  }
 
   return { roomCode, participantId };
 }
@@ -187,7 +203,7 @@ async function startDraft(roomCode, players, clubs, clubMatches, mode = 'realtim
   const room = rooms.get(roomCode);
   if (!room) return { error: 'Sala não encontrada.' };
   if (room.status !== 'lobby') return { error: 'Draft já iniciado.' };
-  if (room.participants.size < 2) return { error: 'Mínimo 2 participantes.' };
+  if (room.participants.size < 1) return { error: 'Mínimo 1 participante.' };
 
   for (const [, p] of room.participants) {
     if (!p.formation) return { error: `${p.name} ainda não escolheu formação.` };
@@ -1263,4 +1279,5 @@ module.exports = {
   FORMATIONS,
   BENCH_SLOTS,
   BENCH_SLOT_IDS,
+  SPECTATOR_ADMIN_ID,
 };

@@ -19,6 +19,7 @@ const {
   adminSimAll,
   adminRemovePick,
   adminAddPick,
+  SPECTATOR_ADMIN_ID,
 } = require('../services/draftManager');
 const { getPlayersAndClubs } = require('../services/cartola');
 const { pool } = require('../db');
@@ -69,15 +70,17 @@ module.exports = function registerHandlers(io) {
   io.on('connection', (socket) => {
     console.log(`[socket] connected: ${socket.id}`);
 
-    socket.on('create_room', async ({ participantName, entryFee, token }) => {
+    socket.on('create_room', async ({ participantName, entryFee, token, spectate }) => {
       if (!participantName?.trim()) {
         return socket.emit('error', { message: 'Nome inválido.' });
       }
       const fee = Math.max(0, parseInt(entryFee) || 0);
+      const isSpectator = spectate === true;
 
       let userId = null;
       let createDeductCoins = null;
-      if (fee > 0) {
+      // Spectator admin does not pay entry fee (they won't play)
+      if (fee > 0 && !isSpectator) {
         const user = await getUserFromToken(token);
         if (!user) return socket.emit('error', { message: 'Token inválido para cobrar entrada.' });
         if (user.coins < fee) {
@@ -90,14 +93,14 @@ module.exports = function registerHandlers(io) {
         socket.emit('coins_updated', { coins: deduct.coins });
       }
 
-      const { roomCode, participantId } = await createRoom(participantName.trim(), socket.id, fee);
+      const { roomCode, participantId } = await createRoom(participantName.trim(), socket.id, fee, isSpectator);
       if (fee > 0 && userId) {
         await logCoinTransaction(userId, -fee, createDeductCoins, `Entrada sala ${roomCode}`);
       }
       socket.join(roomCode);
       socket.emit('room_joined', { roomCode, participantId, isAdmin: true });
       io.to(roomCode).emit('room_state', getRoomState(roomCode));
-      console.log(`[room] created: ${roomCode} by ${participantName} (entry_fee=${fee})`);
+      console.log(`[room] created: ${roomCode} by ${participantName} (entry_fee=${fee}, spectate=${isSpectator})`);
     });
 
     socket.on('join_room', async ({ roomCode, participantName, token }) => {
@@ -282,6 +285,16 @@ module.exports = function registerHandlers(io) {
     socket.on('reconnect_participant', ({ roomCode, participantId }) => {
       const room = getRoom(roomCode);
       if (!room) return socket.emit('error', { message: 'Sala não encontrada.' });
+
+      // Spectator admin reconnect
+      if (participantId === SPECTATOR_ADMIN_ID) {
+        room.adminSocketId = socket.id;
+        socket.join(roomCode);
+        socket.emit('room_joined', { roomCode, participantId: SPECTATOR_ADMIN_ID, isAdmin: true });
+        socket.emit('room_state', getRoomState(roomCode));
+        return;
+      }
+
       const participant = room.participants.get(participantId);
       if (!participant) return socket.emit('error', { message: 'Participante não encontrado.' });
 
