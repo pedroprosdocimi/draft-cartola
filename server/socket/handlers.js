@@ -53,6 +53,18 @@ async function refundCoins(userId, amount) {
   return result.rows[0]?.coins ?? null;
 }
 
+async function logCoinTransaction(userId, amount, balanceAfter, description) {
+  try {
+    await pool.query(
+      `INSERT INTO coin_transactions (user_id, amount, balance_after, description, created_at)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, amount, balanceAfter, description, new Date().toISOString()]
+    );
+  } catch (e) {
+    console.error('[coin_log] erro ao registrar transação:', e.message);
+  }
+}
+
 module.exports = function registerHandlers(io) {
   io.on('connection', (socket) => {
     console.log(`[socket] connected: ${socket.id}`);
@@ -64,6 +76,7 @@ module.exports = function registerHandlers(io) {
       const fee = Math.max(0, parseInt(entryFee) || 0);
 
       let userId = null;
+      let createDeductCoins = null;
       if (fee > 0) {
         const user = await getUserFromToken(token);
         if (!user) return socket.emit('error', { message: 'Token inválido para cobrar entrada.' });
@@ -73,10 +86,14 @@ module.exports = function registerHandlers(io) {
         const deduct = await deductCoins(user.id, fee);
         if (!deduct.ok) return socket.emit('error', { message: `Moedas insuficientes.` });
         userId = user.id;
+        createDeductCoins = deduct.coins;
         socket.emit('coins_updated', { coins: deduct.coins });
       }
 
       const { roomCode, participantId } = await createRoom(participantName.trim(), socket.id, fee);
+      if (fee > 0 && userId) {
+        await logCoinTransaction(userId, -fee, createDeductCoins, `Entrada sala ${roomCode}`);
+      }
       socket.join(roomCode);
       socket.emit('room_joined', { roomCode, participantId, isAdmin: true });
       io.to(roomCode).emit('room_state', getRoomState(roomCode));
@@ -93,6 +110,7 @@ module.exports = function registerHandlers(io) {
 
       const fee = room.entry_fee || 0;
       let userId = null;
+      let joinDeductCoins = null;
 
       if (fee > 0) {
         const user = await getUserFromToken(token);
@@ -103,6 +121,7 @@ module.exports = function registerHandlers(io) {
         const deduct = await deductCoins(user.id, fee);
         if (!deduct.ok) return socket.emit('error', { message: `Moedas insuficientes.` });
         userId = user.id;
+        joinDeductCoins = deduct.coins;
         socket.emit('coins_updated', { coins: deduct.coins });
       }
 
@@ -111,8 +130,13 @@ module.exports = function registerHandlers(io) {
         if (fee > 0 && userId) {
           const refunded = await refundCoins(userId, fee);
           socket.emit('coins_updated', { coins: refunded });
+          await logCoinTransaction(userId, fee, refunded, `Reembolso sala ${code} (sala cheia)`);
         }
         return socket.emit('error', { message: result.error });
+      }
+
+      if (fee > 0 && userId) {
+        await logCoinTransaction(userId, -fee, joinDeductCoins, `Entrada sala ${code}`);
       }
 
       socket.join(code);
@@ -202,10 +226,12 @@ module.exports = function registerHandlers(io) {
 
       const result = rerollOptions(roomCode, participantId, io);
       if (result.error) {
-        await refundCoins(user.id, 5);
+        const refunded = await refundCoins(user.id, 5);
+        socket.emit('coins_updated', { coins: refunded });
         return socket.emit('error', { message: result.error });
       }
 
+      await logCoinTransaction(user.id, -5, deduct.coins, `Novo sorteio (sala ${roomCode})`);
       socket.emit('coins_updated', { coins: deduct.coins });
     });
 

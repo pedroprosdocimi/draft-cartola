@@ -1192,8 +1192,8 @@ async function adminAddPick(roomCode, adminId, targetParticipantId, cartolaId, p
 function rerollOptions(roomCode, participantId, io) {
   const room = rooms.get(roomCode);
   if (!room) return { error: 'Sala não encontrada.' };
-  if (room.status !== 'drafting' && room.status !== 'bench_drafting') {
-    return { error: 'Reroll só disponível durante o draft principal ou de reservas.' };
+  if (room.status !== 'drafting' && room.status !== 'bench_drafting' && room.status !== 'captain_drafting') {
+    return { error: 'Reroll não disponível nesta fase.' };
   }
 
   const currentPicker = getCurrentPicker(room);
@@ -1204,7 +1204,10 @@ function rerollOptions(roomCode, participantId, io) {
   const previousIds = new Set(room.currentOptions.map(p => p.cartola_id));
 
   let candidates;
-  if (room.status === 'bench_drafting') {
+  if (room.status === 'captain_drafting') {
+    const participant = room.participants.get(participantId);
+    candidates = participant.picks.filter(p => !BENCH_SLOT_IDS.includes(p.position_id));
+  } else if (room.status === 'bench_drafting') {
     const slot = BENCH_SLOTS[positionId];
     if (!slot) return { error: 'Slot de reserva inválido.' };
     candidates = (room.benchPlayers || []).filter(

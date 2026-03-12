@@ -38,6 +38,14 @@ async function initDb() {
     `ALTER TABLE draft_sessions ADD COLUMN IF NOT EXISTS entry_fee INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE draft_sessions ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'realtime'`,
     `ALTER TABLE draft_sessions ADD COLUMN IF NOT EXISTS parallel_phase TEXT`,
+    `CREATE TABLE IF NOT EXISTS coin_transactions (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id),
+      amount INTEGER NOT NULL,
+      balance_after INTEGER NOT NULL,
+      description TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`,
   ];
   for (const m of migrations) {
     try { await pool.query(m); } catch { /* column already exists */ }

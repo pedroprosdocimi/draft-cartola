@@ -345,6 +345,49 @@ router.get('/admin/drafts/:id', async (req, res) => {
   }
 });
 
+// DELETE /api/admin/drafts/:id — delete a draft and all its data
+router.delete('/admin/drafts/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const sessionRes = await pool.query('SELECT id FROM draft_sessions WHERE id = $1', [id]);
+    if (!sessionRes.rows.length) return res.status(404).json({ error: 'Draft não encontrado.' });
+    await pool.query('DELETE FROM draft_picks WHERE session_id = $1', [id]);
+    await pool.query('DELETE FROM draft_participants WHERE session_id = $1', [id]);
+    await pool.query('DELETE FROM draft_sessions WHERE id = $1', [id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/admin/drafts/:id — update draft status or entry_fee
+router.patch('/admin/drafts/:id', async (req, res) => {
+  const { id } = req.params;
+  const { status, entry_fee } = req.body;
+  const allowed = ['lobby', 'drafting', 'bench_drafting', 'captain_drafting', 'parallel_waiting', 'complete'];
+  if (status !== undefined && !allowed.includes(status)) {
+    return res.status(400).json({ error: 'Status inválido.' });
+  }
+  try {
+    const sessionRes = await pool.query('SELECT id FROM draft_sessions WHERE id = $1', [id]);
+    if (!sessionRes.rows.length) return res.status(404).json({ error: 'Draft não encontrado.' });
+
+    const updates = [];
+    const values = [];
+    if (status !== undefined) { updates.push(`status = $${values.length + 1}`); values.push(status); }
+    if (entry_fee !== undefined) { updates.push(`entry_fee = $${values.length + 1}`); values.push(parseInt(entry_fee) || 0); }
+    if (!updates.length) return res.status(400).json({ error: 'Nenhum campo para atualizar.' });
+    values.push(id);
+    const result = await pool.query(
+      `UPDATE draft_sessions SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING *`,
+      values
+    );
+    res.json({ ok: true, session: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/admin/users — list all users with coins
 router.get('/admin/users', async (req, res) => {
   try {
@@ -370,7 +413,38 @@ router.patch('/admin/users/:id/coins', async (req, res) => {
       [delta, userId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Usuário não encontrado.' });
-    res.json({ ok: true, coins: result.rows[0].coins });
+    const balanceAfter = result.rows[0].coins;
+    await pool.query(
+      `INSERT INTO coin_transactions (user_id, amount, balance_after, description, created_at) VALUES ($1, $2, $3, $4, $5)`,
+      [userId, delta, balanceAfter, 'Ajuste admin', new Date().toISOString()]
+    );
+    res.json({ ok: true, coins: balanceAfter });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/coin-transactions — histórico de transações de moedas
+router.get('/admin/coin-transactions', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 200, 500);
+    const userId = req.query.user_id ? parseInt(req.query.user_id) : null;
+
+    let query = `
+      SELECT ct.id, ct.user_id, u.username, u.nome_time, ct.amount, ct.balance_after, ct.description, ct.created_at
+      FROM coin_transactions ct
+      JOIN users u ON u.id = ct.user_id
+    `;
+    const params = [];
+    if (userId) {
+      query += ` WHERE ct.user_id = $1`;
+      params.push(userId);
+    }
+    query += ` ORDER BY ct.created_at DESC LIMIT $${params.length + 1}`;
+    params.push(limit);
+
+    const { rows } = await pool.query(query, params);
+    res.json({ transactions: rows });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

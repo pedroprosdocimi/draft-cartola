@@ -524,6 +524,161 @@ function DraftDetail({ draftId, onBack }) {
   );
 }
 
+const STATUS_OPTIONS = ['lobby', 'drafting', 'bench_drafting', 'captain_drafting', 'parallel_waiting', 'complete'];
+const STATUS_LABEL = {
+  lobby: 'Lobby',
+  drafting: 'Drafting',
+  bench_drafting: 'Reservas',
+  captain_drafting: 'Capitao',
+  parallel_waiting: 'Paralelo',
+  complete: 'Finalizado',
+};
+
+// ── Edit Modal ────────────────────────────────────────────────
+function EditDraftModal({ draft, onClose, onSaved }) {
+  const [status, setStatus] = useState(draft.status);
+  const [entryFee, setEntryFee] = useState(draft.entry_fee ?? 0);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const token = localStorage.getItem('draft_token');
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      const r = await fetch(`${API_URL}/api/admin/drafts/${draft.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status, entry_fee: parseInt(entryFee) || 0 }),
+      });
+      const d = await r.json();
+      if (!r.ok || d.error) { setError(d.error || 'Erro ao salvar.'); return; }
+      onSaved({ ...draft, status, entry_fee: parseInt(entryFee) || 0 });
+    } catch {
+      setError('Erro de conexão.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={onClose}>
+      <div
+        className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 className="font-bold text-white text-lg mb-1">Editar Draft</h3>
+        <p className="text-xs text-gray-500 font-mono mb-4">{draft.id}</p>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs text-gray-400 font-medium mb-1">Status</label>
+            <select
+              value={status}
+              onChange={e => setStatus(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-cartola-green"
+            >
+              {STATUS_OPTIONS.map(s => (
+                <option key={s} value={s}>{STATUS_LABEL[s] || s}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-400 font-medium mb-1">Entrada (moedas)</label>
+            <input
+              type="number"
+              min="0"
+              value={entryFee}
+              onChange={e => setEntryFee(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-cartola-green"
+            />
+          </div>
+        </div>
+
+        {error && <p className="text-red-400 text-xs mt-3">{error}</p>}
+
+        <div className="flex gap-2 mt-5">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 rounded-lg bg-gray-800 text-gray-300 text-sm font-medium hover:bg-gray-700 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 px-4 py-2 rounded-lg bg-cartola-green text-white text-sm font-medium hover:brightness-110 transition-all disabled:opacity-50"
+          >
+            {saving ? 'Salvando...' : 'Salvar'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// ── Delete Confirm Modal ──────────────────────────────────────
+function DeleteDraftModal({ draft, onClose, onDeleted }) {
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState(null);
+  const token = localStorage.getItem('draft_token');
+
+  async function handleDelete() {
+    setDeleting(true);
+    setError(null);
+    try {
+      const r = await fetch(`${API_URL}/api/admin/drafts/${draft.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await r.json();
+      if (!r.ok || d.error) { setError(d.error || 'Erro ao excluir.'); return; }
+      onDeleted(draft.id);
+    } catch {
+      setError('Erro de conexão.');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={onClose}>
+      <div
+        className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 className="font-bold text-white text-lg mb-1">Excluir Draft</h3>
+        <p className="text-xs text-gray-500 font-mono mb-3">{draft.id}</p>
+        <p className="text-sm text-gray-300 mb-2">
+          Isso vai apagar permanentemente o draft e todos os seus dados (participantes e picks).
+        </p>
+        <p className="text-xs text-red-400">Esta ação não pode ser desfeita.</p>
+
+        {error && <p className="text-red-400 text-xs mt-3">{error}</p>}
+
+        <div className="flex gap-2 mt-5">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 rounded-lg bg-gray-800 text-gray-300 text-sm font-medium hover:bg-gray-700 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="flex-1 px-4 py-2 rounded-lg bg-red-700 text-white text-sm font-medium hover:bg-red-600 transition-all disabled:opacity-50"
+          >
+            {deleting ? 'Excluindo...' : 'Excluir'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // ── List view ─────────────────────────────────────────────────
 export default function DraftHistory() {
   const [drafts, setDrafts] = useState([]);
@@ -531,11 +686,12 @@ export default function DraftHistory() {
   const [error, setError] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [open, setOpen] = useState(false);
+  const [editingDraft, setEditingDraft] = useState(null);
+  const [deletingDraft, setDeletingDraft] = useState(null);
 
   const token = localStorage.getItem('draft_token');
 
-  useEffect(() => {
-    if (!open) return;
+  function loadDrafts() {
     setLoading(true);
     fetch(`${API_URL}/api/admin/drafts`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -547,7 +703,22 @@ export default function DraftHistory() {
       })
       .catch(() => setError('Erro ao carregar drafts.'))
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    loadDrafts();
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleSaved(updated) {
+    setDrafts(prev => prev.map(d => d.id === updated.id ? { ...d, ...updated } : d));
+    setEditingDraft(null);
+  }
+
+  function handleDeleted(id) {
+    setDrafts(prev => prev.filter(d => d.id !== id));
+    setDeletingDraft(null);
+  }
 
   const inProgress = drafts.filter(d => d.status !== 'complete');
   const completed = drafts.filter(d => d.status === 'complete');
@@ -572,6 +743,14 @@ export default function DraftHistory() {
 
       {open && (
         <div className="mt-4">
+          <div className="flex justify-end mb-2">
+            <button
+              onClick={loadDrafts}
+              className="text-xs text-gray-400 hover:text-white transition-colors px-2 py-1 rounded bg-gray-800 hover:bg-gray-700"
+            >
+              ↻ Atualizar
+            </button>
+          </div>
           {loading ? (
             <p className="text-gray-500 text-sm text-center py-4">Carregando...</p>
           ) : error ? (
@@ -583,44 +762,73 @@ export default function DraftHistory() {
               {inProgress.length > 0 && (
                 <div>
                   <h3 className="text-xs font-semibold text-yellow-400 uppercase tracking-wide mb-2">Em andamento ({inProgress.length})</h3>
-                  <DraftTable drafts={inProgress} onSelect={setSelectedId} />
+                  <DraftTable drafts={inProgress} onSelect={setSelectedId} onEdit={setEditingDraft} onDelete={setDeletingDraft} />
                 </div>
               )}
               {completed.length > 0 && (
                 <div>
                   <h3 className="text-xs font-semibold text-green-400 uppercase tracking-wide mb-2">Finalizados ({completed.length})</h3>
-                  <DraftTable drafts={completed} onSelect={setSelectedId} />
+                  <DraftTable drafts={completed} onSelect={setSelectedId} onEdit={setEditingDraft} onDelete={setDeletingDraft} />
                 </div>
               )}
             </div>
           )}
         </div>
       )}
+
+      {editingDraft && (
+        <EditDraftModal draft={editingDraft} onClose={() => setEditingDraft(null)} onSaved={handleSaved} />
+      )}
+      {deletingDraft && (
+        <DeleteDraftModal draft={deletingDraft} onClose={() => setDeletingDraft(null)} onDeleted={handleDeleted} />
+      )}
     </div>
   );
 }
 
-function DraftTable({ drafts, onSelect }) {
+function DraftTable({ drafts, onSelect, onEdit, onDelete }) {
   return (
     <div className="divide-y divide-gray-800">
       {drafts.map(d => (
-        <button
-          key={d.id}
-          onClick={() => onSelect(d.id)}
-          className="w-full flex items-center gap-4 px-2 py-3 hover:bg-gray-800/50 rounded-lg transition-colors text-left"
-        >
-          <div className="flex-1 min-w-0">
-            <div className="font-mono text-white text-sm font-semibold truncate">{d.id}</div>
-            <div className="text-xs text-gray-500 mt-0.5">{formatDate(d.created_at)}</div>
+        <div key={d.id} className="flex items-center gap-2 px-2 py-3 hover:bg-gray-800/30 rounded-lg transition-colors">
+          {/* Clickable info area */}
+          <button
+            onClick={() => onSelect(d.id)}
+            className="flex-1 min-w-0 flex items-center gap-4 text-left"
+          >
+            <div className="flex-1 min-w-0">
+              <div className="font-mono text-white text-sm font-semibold truncate">{d.id}</div>
+              <div className="text-xs text-gray-500 mt-0.5">
+                {formatDate(d.created_at)}
+                {d.entry_fee > 0 && <span className="ml-2 text-yellow-500">⬤ {d.entry_fee} 🪙</span>}
+              </div>
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <span className="text-sm text-gray-300 hidden sm:block">
+                <span className="font-semibold text-white">{d.participant_count}</span> part.
+              </span>
+              <StatusBadge status={d.status} />
+            </div>
+          </button>
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={() => onEdit(d)}
+              title="Editar"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700 transition-colors text-sm"
+            >
+              ✏️
+            </button>
+            <button
+              onClick={() => onDelete(d)}
+              title="Excluir"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-gray-700 transition-colors text-sm"
+            >
+              🗑️
+            </button>
           </div>
-          <div className="flex items-center gap-3 flex-shrink-0">
-            <span className="text-sm text-gray-300">
-              <span className="font-semibold text-white">{d.participant_count}</span> participantes
-            </span>
-            <StatusBadge status={d.status} />
-            <span className="text-gray-600 text-xs">→</span>
-          </div>
-        </button>
+        </div>
       ))}
     </div>
   );

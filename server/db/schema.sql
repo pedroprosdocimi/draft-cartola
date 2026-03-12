@@ -95,3 +95,12 @@ CREATE TABLE IF NOT EXISTS draft_picks (
   overall_pick INTEGER,
   picked_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS coin_transactions (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  amount INTEGER NOT NULL,
+  balance_after INTEGER NOT NULL,
+  description TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);

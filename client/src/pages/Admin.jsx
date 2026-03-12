@@ -152,6 +152,11 @@ export default function Admin({ onBack }) {
   const [adjustingUserId, setAdjustingUserId] = useState(null);
   const [coinError, setCoinError] = useState(null);
 
+  // Coin transactions history
+  const [coinTx, setCoinTx] = useState([]);
+  const [coinTxLoading, setCoinTxLoading] = useState(false);
+  const [coinTxFilter, setCoinTxFilter] = useState(0); // 0 = todos, userId = filtro
+
   const token = localStorage.getItem('draft_token');
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -184,6 +189,24 @@ export default function Admin({ onBack }) {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  const loadCoinTransactions = useCallback(async (userId = 0) => {
+    setCoinTxLoading(true);
+    try {
+      const url = userId
+        ? `${API_URL}/api/admin/coin-transactions?user_id=${userId}`
+        : `${API_URL}/api/admin/coin-transactions`;
+      const res = await fetch(url, { headers });
+      const data = await res.json();
+      if (data.transactions) setCoinTx(data.transactions);
+    } catch {
+      // silently fail
+    } finally {
+      setCoinTxLoading(false);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { loadCoinTransactions(coinTxFilter); }, [coinTxFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleAdjustCoins = async (userId, delta) => {
     if (!delta || delta === 0) return;
     setAdjustingUserId(userId);
@@ -198,6 +221,7 @@ export default function Admin({ onBack }) {
       if (data.ok) {
         setUsers(prev => prev.map(u => u.id === userId ? { ...u, coins: data.coins } : u));
         setCoinDelta(prev => ({ ...prev, [userId]: 0 }));
+        loadCoinTransactions(coinTxFilter);
       } else {
         setCoinError(data.error || 'Erro ao ajustar moedas.');
       }
@@ -443,6 +467,82 @@ export default function Admin({ onBack }) {
                             {adjustingUserId === u.id ? '...' : delta >= 0 ? '+ Adicionar' : '− Remover'}
                           </button>
                         </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ── Histórico de Transações de Moedas ── */}
+      <div className="card mb-6">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <h2 className="font-semibold text-gray-300 flex items-center gap-2">
+            📜 Histórico de Moedas
+            <span className="text-xs text-gray-600 font-normal">({coinTx.length})</span>
+          </h2>
+          <div className="flex items-center gap-2">
+            <select
+              value={coinTxFilter}
+              onChange={e => setCoinTxFilter(Number(e.target.value))}
+              className="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-cartola-green"
+            >
+              <option value={0}>Todos os usuários</option>
+              {users.map(u => (
+                <option key={u.id} value={u.id}>{u.username}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => loadCoinTransactions(coinTxFilter)}
+              disabled={coinTxLoading}
+              className="text-xs text-gray-500 hover:text-white border border-gray-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+            >
+              {coinTxLoading ? '...' : '↻'}
+            </button>
+          </div>
+        </div>
+
+        {coinTxLoading && coinTx.length === 0 ? (
+          <p className="text-gray-600 text-sm text-center py-4">Carregando...</p>
+        ) : coinTx.length === 0 ? (
+          <p className="text-gray-600 text-sm text-center py-4">Nenhuma transação registrada.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500 border-b border-gray-800 text-xs">
+                  <th className="pb-2 pr-3 font-medium">Data</th>
+                  <th className="pb-2 pr-3 font-medium">Usuário</th>
+                  <th className="pb-2 pr-3 font-medium">Descrição</th>
+                  <th className="pb-2 pr-3 font-medium text-right">Valor</th>
+                  <th className="pb-2 font-medium text-right">Saldo</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800/40">
+                {coinTx.map(tx => {
+                  const isPositive = tx.amount > 0;
+                  const date = new Date(tx.created_at);
+                  const dateStr = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+                  const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                  return (
+                    <tr key={tx.id} className="hover:bg-gray-800/30">
+                      <td className="py-2 pr-3 text-gray-500 whitespace-nowrap">
+                        <div className="text-xs">{dateStr}</div>
+                        <div className="text-xs text-gray-600">{timeStr}</div>
+                      </td>
+                      <td className="py-2 pr-3">
+                        <div className="text-white font-medium text-xs">{tx.username}</div>
+                        <div className="text-gray-600 text-xs">{tx.nome_time}</div>
+                      </td>
+                      <td className="py-2 pr-3 text-gray-400 text-xs">{tx.description}</td>
+                      <td className={`py-2 pr-3 text-right font-mono font-bold text-sm ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                        {isPositive ? '+' : ''}{tx.amount} 🪙
+                      </td>
+                      <td className="py-2 text-right font-mono text-yellow-300 text-sm font-bold">
+                        {tx.balance_after}
                       </td>
                     </tr>
                   );

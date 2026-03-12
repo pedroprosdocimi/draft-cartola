@@ -144,7 +144,7 @@ export default function PickPanel({
 
   // ── Modal: 5 player cards (shown to everyone) ────────────────────────────
   if (offeredPlayers) {
-    const canReroll = isMyTurn && phase !== 'captain' && onReroll;
+    const canReroll = isMyTurn && onReroll;
     const hasCoins = myCoins != null && myCoins >= 5;
 
     return (
