@@ -376,6 +376,22 @@ router.patch('/admin/users/:id/coins', async (req, res) => {
   }
 });
 
+// GET /api/me — retorna as moedas do usuário autenticado
+router.get('/me', async (req, res) => {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) return res.status(401).json({ error: 'Não autorizado.' });
+  const jwt = require('jsonwebtoken');
+  const JWT_SECRET = 'draft-cartola-secret-key-2024';
+  try {
+    const payload = jwt.verify(header.slice(7), JWT_SECRET);
+    const user = (await pool.query('SELECT id, username, coins FROM users WHERE id = $1', [payload.id])).rows[0];
+    if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
+    res.json({ id: user.id, username: user.username, coins: user.coins });
+  } catch {
+    res.status(401).json({ error: 'Token inválido.' });
+  }
+});
+
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });

@@ -136,17 +136,22 @@ export default function PickPanel({
   phase = 'main',
   benchNeededSlots = [],
   onPickBenchSlot,
+  myCoins = null,
+  onReroll,
 }) {
   const posLabel = POSITION_LABELS[currentPickerPositionId] || '';
   const posBadgeColor = (POSITION_COLORS[currentPickerPositionId]?.btn || 'border-gray-600 bg-gray-600').split(' ')[0];
 
   // ── Modal: 5 player cards (shown to everyone) ────────────────────────────
   if (offeredPlayers) {
+    const canReroll = isMyTurn && phase !== 'captain' && onReroll;
+    const hasCoins = myCoins != null && myCoins >= 5;
+
     return (
       <div className="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center p-3 sm:p-4 gap-3 sm:gap-5 overflow-y-auto">
         <Timer timeLeft={timeLeft} isMyTurn={isMyTurn} />
         <div className="text-center">
-          <div className="flex items-center justify-center gap-2 mb-2">
+          <div className="flex items-center justify-center gap-2 mb-2 flex-wrap">
             {phase === 'captain' ? (
               <span className="border border-yellow-500 text-yellow-300 text-sm font-bold px-4 py-1.5 rounded-lg bg-yellow-900/30">
                 👑 CAPITÃO
@@ -154,6 +159,12 @@ export default function PickPanel({
             ) : (
               <span className={`border ${posBadgeColor} text-white text-sm font-bold px-4 py-1.5 rounded-lg`}>
                 {posLabel}
+              </span>
+            )}
+            {/* Moedas do jogador — só visível para quem é sua vez */}
+            {isMyTurn && myCoins != null && (
+              <span className="flex items-center gap-1 text-sm font-semibold text-yellow-300 border border-yellow-600/50 bg-yellow-900/30 px-3 py-1.5 rounded-lg">
+                🪙 {myCoins}
               </span>
             )}
           </div>
@@ -182,6 +193,24 @@ export default function PickPanel({
             />
           ))}
         </div>
+        {/* Botão de reroll — só para quem está escolhendo, nas fases main/bench */}
+        {canReroll && (
+          <button
+            onClick={onReroll}
+            disabled={!hasCoins}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl border text-sm font-semibold transition-all
+              ${hasCoins
+                ? 'border-yellow-600 bg-yellow-900/40 text-yellow-300 hover:bg-yellow-800/60 hover:scale-105 active:scale-95'
+                : 'border-gray-700 bg-gray-800/40 text-gray-600 cursor-not-allowed opacity-50'
+              }`}
+            title={hasCoins ? 'Sortear 5 novos jogadores' : `Moedas insuficientes (você tem ${myCoins ?? 0} 🪙)`}
+          >
+            🎲 Sortear novamente
+            <span className={`text-xs px-2 py-0.5 rounded-md font-bold ${hasCoins ? 'bg-yellow-700/50 text-yellow-200' : 'bg-gray-700 text-gray-500'}`}>
+              5 🪙
+            </span>
+          </button>
+        )}
       </div>
     );
   }

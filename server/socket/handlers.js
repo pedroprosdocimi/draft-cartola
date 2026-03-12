@@ -9,6 +9,7 @@ const {
   pickBenchSlot,
   pickPlayer,
   pickCaptain,
+  rerollOptions,
   getRoomState,
   getRoom,
   startTimer,
@@ -189,6 +190,23 @@ module.exports = function registerHandlers(io) {
     socket.on('pick_player', async ({ roomCode, participantId, cartolaId }) => {
       const result = await pickPlayer(roomCode, participantId, cartolaId, io);
       if (result.error) return socket.emit('error', { message: result.error });
+    });
+
+    // Reroll the 5 offered players — costs 5 coins
+    socket.on('reroll_options', async ({ roomCode, participantId, token }) => {
+      const user = await getUserFromToken(token);
+      if (!user) return socket.emit('error', { message: 'Token inválido. Faça login para usar moedas.' });
+
+      const deduct = await deductCoins(user.id, 5);
+      if (!deduct.ok) return socket.emit('error', { message: `Moedas insuficientes. Você precisa de 5 🪙 para sortear novamente.` });
+
+      const result = rerollOptions(roomCode, participantId, io);
+      if (result.error) {
+        await refundCoins(user.id, 5);
+        return socket.emit('error', { message: result.error });
+      }
+
+      socket.emit('coins_updated', { coins: deduct.coins });
     });
 
     // Captain phase: pick captain from own starters

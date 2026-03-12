@@ -1187,6 +1187,53 @@ async function adminAddPick(roomCode, adminId, targetParticipantId, cartolaId, p
   return { ok: true };
 }
 
+// Reroll the 5 offered players for the current pick (costs 5 coins, handled in handler).
+// Tries to offer different players from the previous batch; falls back to all available if not enough.
+function rerollOptions(roomCode, participantId, io) {
+  const room = rooms.get(roomCode);
+  if (!room) return { error: 'Sala não encontrada.' };
+  if (room.status !== 'drafting' && room.status !== 'bench_drafting') {
+    return { error: 'Reroll só disponível durante o draft principal ou de reservas.' };
+  }
+
+  const currentPicker = getCurrentPicker(room);
+  if (currentPicker !== participantId) return { error: 'Não é sua vez.' };
+  if (!room.currentOptions) return { error: 'Escolha uma posição antes de sortear novamente.' };
+
+  const positionId = room.currentPickerPositionId;
+  const previousIds = new Set(room.currentOptions.map(p => p.cartola_id));
+
+  let candidates;
+  if (room.status === 'bench_drafting') {
+    const slot = BENCH_SLOTS[positionId];
+    if (!slot) return { error: 'Slot de reserva inválido.' };
+    candidates = (room.benchPlayers || []).filter(
+      p => slot.allowedPositions.includes(p.position_id) && !room.pickedIds.has(p.cartola_id)
+    );
+  } else {
+    candidates = room.players.filter(
+      p => p.position_id === positionId && !room.pickedIds.has(p.cartola_id)
+    );
+  }
+
+  if (candidates.length === 0) return { error: 'Nenhum jogador disponível para sortear.' };
+
+  // Prefer players not in the previous batch; fall back to full candidates if too few fresh ones
+  const fresh = candidates.filter(p => !previousIds.has(p.cartola_id));
+  const source = fresh.length >= 3 ? fresh : candidates;
+
+  const shuffled = [...source].sort(() => Math.random() - 0.5);
+  const options = shuffled.slice(0, 5);
+
+  room.currentOptions = options;
+
+  const participant = room.participants.get(participantId);
+  const target = room.mode === 'parallel' ? participant.socketId : room.code;
+  io.to(target).emit('options_rerolled', { participantId, positionId, options });
+
+  return { ok: true };
+}
+
 module.exports = {
   createRoom,
   joinRoom,
@@ -1197,6 +1244,7 @@ module.exports = {
   pickBenchSlot,
   pickPlayer,
   pickCaptain,
+  rerollOptions,
   getRoomState,
   getRoom,
   startTimer,

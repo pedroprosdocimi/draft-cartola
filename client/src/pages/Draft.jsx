@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import socket from '../socket.js';
+import { API_URL } from '../config.js';
 import PickPanel from '../components/PickPanel.jsx';
 import TeamSlots from '../components/TeamSlots.jsx';
 import DraftOrder from '../components/DraftOrder.jsx';
@@ -99,6 +100,17 @@ export default function Draft({ roomCode, participantId, isAdmin, initialData, o
   const [currentPickerPositionId, setCurrentPickerPositionId] = useState(
     initialData.currentPickerPositionId || null
   );
+  const [myCoins, setMyCoins] = useState(null);
+
+  // Busca moedas iniciais do usuário autenticado
+  useEffect(() => {
+    const token = localStorage.getItem('draft_token');
+    if (!token) return;
+    fetch(`${API_URL}/api/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.coins != null) setMyCoins(data.coins); })
+      .catch(() => {});
+  }, []);
 
   // Ref so socket handlers always see latest participants without re-registering
   const participantsRef = useRef(participants);
@@ -245,6 +257,15 @@ export default function Draft({ roomCode, participantId, isAdmin, initialData, o
       });
     };
 
+    const onCoinsUpdated = ({ coins }) => setMyCoins(coins);
+
+    const onOptionsRerolled = ({ options }) => {
+      setOfferedPlayers(options.map(p => ({
+        ...p,
+        club: p.club || clubs[p.club_id] || clubs[String(p.club_id)] || null,
+      })));
+    };
+
     socket.on('draft_started', onDraftStarted);
     socket.on('picks_updated', onPicksUpdated);
     socket.on('parallel_turn_done', onParallelDone);
@@ -256,6 +277,8 @@ export default function Draft({ roomCode, participantId, isAdmin, initialData, o
     socket.on('auto_picked', onAutoPicked);
     socket.on('timer_tick', onTimerTick);
     socket.on('error', onError);
+    socket.on('coins_updated', onCoinsUpdated);
+    socket.on('options_rerolled', onOptionsRerolled);
 
     return () => {
       socket.off('draft_started', onDraftStarted);
@@ -269,6 +292,8 @@ export default function Draft({ roomCode, participantId, isAdmin, initialData, o
       socket.off('auto_picked', onAutoPicked);
       socket.off('timer_tick', onTimerTick);
       socket.off('error', onError);
+      socket.off('coins_updated', onCoinsUpdated);
+      socket.off('options_rerolled', onOptionsRerolled);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -291,6 +316,11 @@ export default function Draft({ roomCode, participantId, isAdmin, initialData, o
 
   const handlePickCaptain = useCallback((cartolaId) => {
     socket.emit('pick_captain', { roomCode, participantId, cartolaId });
+  }, [roomCode, participantId]);
+
+  const handleReroll = useCallback(() => {
+    const token = localStorage.getItem('draft_token');
+    socket.emit('reroll_options', { roomCode, participantId, token });
   }, [roomCode, participantId]);
 
   // ── Admin helpers ──────────────────────────────────────────────────────────
@@ -609,6 +639,8 @@ export default function Draft({ roomCode, participantId, isAdmin, initialData, o
         timeLeft={timeLeft}
         phase={phase}
         benchNeededSlots={myBenchNeededSlots}
+        myCoins={myCoins}
+        onReroll={handleReroll}
       />
 
       {/* Main layout — 3 columns on desktop, tabs on mobile */}
