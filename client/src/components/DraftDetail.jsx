@@ -19,10 +19,25 @@ function scoreColor(score) {
   return 'text-green-400';
 }
 
+// Build set of club_ids that have already played their match this round.
+// A club is considered to have played if ANY player from that club (across all teams)
+// has a non-null round_score. This prevents substituting starters whose games haven't
+// happened yet.
+function buildPlayedClubs(allTeams) {
+  const played = new Set();
+  for (const team of allTeams) {
+    for (const pick of team.picks) {
+      if (pick.round_score != null && pick.club_id) played.add(pick.club_id);
+    }
+  }
+  return played;
+}
+
 // Returns substitution maps:
 // subMap: starterCartolaId -> benchPlayer (bench came in for this starter)
 // usedBenchIds: Set of bench cartolaIds that were subbed in
-function buildSubstitutions(picks) {
+// playedClubs: Set of club_ids whose game has already happened this round
+function buildSubstitutions(picks, playedClubs) {
   const mainPicks = picks.filter(p => !BENCH_SLOT_IDS.includes(p.position_id));
   const benchPicks = picks.filter(p => BENCH_SLOT_IDS.includes(p.position_id))
     .sort((a, b) => (POS_ORDER[a.position_id] ?? 9) - (POS_ORDER[b.position_id] ?? 9));
@@ -36,6 +51,7 @@ function buildSubstitutions(picks) {
     const target = mainPicks.find(p =>
       allowed.includes(p.position_id) &&
       p.round_score == null &&
+      playedClubs.has(p.club_id) &&  // só substitui se o time do titular já jogou
       !subMap.has(p.cartola_id)
     );
     if (target) {
@@ -47,9 +63,9 @@ function buildSubstitutions(picks) {
   return { subMap, usedBenchIds };
 }
 
-function teamRoundScore(picks, captainId) {
+function teamRoundScore(picks, captainId, playedClubs) {
   const mainPicks = picks.filter(p => !BENCH_SLOT_IDS.includes(p.position_id));
-  const { subMap } = buildSubstitutions(picks);
+  const { subMap } = buildSubstitutions(picks, playedClubs);
 
   return mainPicks.reduce((sum, p) => {
     const effective = subMap.has(p.cartola_id) ? subMap.get(p.cartola_id) : p;
@@ -125,13 +141,16 @@ export default function DraftDetail({ roomCode, onClose }) {
   const sortedTeams = [...data.teams].sort((a, b) => (a.pickOrder || 0) - (b.pickOrder || 0));
   const activeTeam = data.teams.find(t => t.id === activeTab);
 
+  // Clubes que já jogaram nesta rodada (usados para validar substituições)
+  const playedClubs = buildPlayedClubs(data.teams);
+
   const mainPicks = (activeTeam?.picks.filter(p => !BENCH_SLOT_IDS.includes(p.position_id)) || [])
     .sort((a, b) => (POS_ORDER[a.position_id] ?? 9) - (POS_ORDER[b.position_id] ?? 9));
   const benchPicks = (activeTeam?.picks.filter(p => BENCH_SLOT_IDS.includes(p.position_id)) || [])
     .sort((a, b) => (POS_ORDER[a.position_id] ?? 9) - (POS_ORDER[b.position_id] ?? 9));
 
   const { subMap, usedBenchIds } = activeTeam
-    ? buildSubstitutions(activeTeam.picks)
+    ? buildSubstitutions(activeTeam.picks, playedClubs)
     : { subMap: new Map(), usedBenchIds: new Set() };
 
   const cols = 5;
@@ -175,7 +194,7 @@ export default function DraftDetail({ roomCode, onClose }) {
         {/* Team summary cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
           {sortedTeams.map(team => {
-            const roundTotal = teamRoundScore(team.picks, team.captainId);
+            const roundTotal = teamRoundScore(team.picks, team.captainId, playedClubs);
             const avgTotal = teamAvgScore(team.picks);
             return (
               <button
@@ -209,8 +228,8 @@ export default function DraftDetail({ roomCode, onClose }) {
               </div>
               {hasRoundScores && (
                 <div className="text-right">
-                  <div className={`text-xl font-bold ${scoreColor(teamRoundScore(activeTeam.picks, activeTeam.captainId))}`}>
-                    {teamRoundScore(activeTeam.picks, activeTeam.captainId).toFixed(2)}
+                  <div className={`text-xl font-bold ${scoreColor(teamRoundScore(activeTeam.picks, activeTeam.captainId, playedClubs))}`}>
+                    {teamRoundScore(activeTeam.picks, activeTeam.captainId, playedClubs).toFixed(2)}
                   </div>
                   <div className="text-xs text-gray-500">pts · Rodada {data.roundNumber}</div>
                 </div>
