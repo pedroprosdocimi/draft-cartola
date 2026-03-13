@@ -46,7 +46,32 @@ function StatusBadge({ statusId }) {
   );
 }
 
-function PlayerRow({ player, match, action }) {
+function scoreColor(score) {
+  if (score == null) return 'text-gray-600';
+  if (score >= 6) return 'text-green-400';
+  if (score >= 3) return 'text-cartola-gold';
+  return 'text-red-400';
+}
+
+function RoundsHeader({ recentRounds, hasAction }) {
+  if (!recentRounds.length) return null;
+  return (
+    <div className="flex items-center gap-2 sm:gap-3 px-3 py-1.5 border-b border-gray-700/50 mb-0.5">
+      <div className="flex-1 min-w-0" />
+      {recentRounds.map(r => (
+        <div key={r} className="w-11 text-right flex-shrink-0">
+          <span className="text-xs font-bold text-gray-500">Rd {r}</span>
+        </div>
+      ))}
+      <div className="w-10 text-right flex-shrink-0">
+        <span className="text-xs text-gray-600">méd</span>
+      </div>
+      {hasAction && <div className="w-16 flex-shrink-0" />}
+    </div>
+  );
+}
+
+function PlayerRow({ player, match, action, recentRounds = [] }) {
   const posColor = POS_COLORS[player.position_id] || 'bg-gray-600';
   return (
     <div className="flex items-center gap-2 sm:gap-3 px-3 py-2 hover:bg-gray-800/50 rounded-lg">
@@ -66,19 +91,17 @@ function PlayerRow({ player, match, action }) {
         {POS_LABELS[player.position_id]}
       </span>
       <StatusBadge statusId={player.status_id} />
-      <div className="text-right flex-shrink-0">
-        {(() => {
-          const last = player.recentScores?.[0]?.score;
-          const color = last == null ? 'text-gray-500' : last >= 6 ? 'text-green-400' : last >= 3 ? 'text-cartola-gold' : 'text-red-400';
-          return (
-            <>
-              <div className={`text-sm font-semibold ${color}`}>
-                {last != null ? last.toFixed(1) : '–'}
-              </div>
-              <div className="text-xs text-gray-600">méd {(player.average_score || 0).toFixed(1)}</div>
-            </>
-          );
-        })()}
+      {recentRounds.map(round => {
+        const s = player.recentScores?.find(e => e.round === round);
+        const score = s?.score;
+        return (
+          <div key={round} className={`w-11 text-right flex-shrink-0 text-sm font-semibold ${scoreColor(score)}`}>
+            {score != null ? score.toFixed(1) : '–'}
+          </div>
+        );
+      })}
+      <div className="w-10 text-right flex-shrink-0 text-xs text-gray-500">
+        {(player.average_score || 0).toFixed(1)}
       </div>
       {action && <div className="flex-shrink-0">{action}</div>}
     </div>
@@ -302,6 +325,15 @@ export default function Admin({ onBack }) {
       setTogglingId(null);
     }
   };
+
+  // Top 3 most recent round numbers across all players
+  const recentRounds = useMemo(() => {
+    const roundSet = new Set();
+    for (const p of players) {
+      for (const s of p.recentScores || []) roundSet.add(s.round);
+    }
+    return [...roundSet].sort((a, b) => b - a).slice(0, 3);
+  }, [players]);
 
   // Clubs list sorted alphabetically
   const clubs = useMemo(() => {
@@ -623,32 +655,36 @@ export default function Admin({ onBack }) {
               {poolDraft.length === 0 ? (
                 <p className="text-gray-600 text-sm text-center py-4">Nenhum com os filtros atuais</p>
               ) : (
-                <div className="divide-y divide-gray-800/50">
-                  {poolDraft.map(p => {
-                    const isManual = eligibleIds.has(p.cartola_id);
-                    const isToggling = togglingId === p.cartola_id;
-                    return (
-                      <div
-                        key={p.cartola_id}
-                        className={isManual ? 'border-l-2 border-blue-500 rounded-r-lg' : ''}
-                      >
-                        <PlayerRow
-                          player={p}
-                          match={clubMatches[p.club_id] || clubMatches[String(p.club_id)] || null}
-                          action={isManual ? (
-                            <button
-                              onClick={() => handleToggleEligible(p.cartola_id)}
-                              disabled={isToggling}
-                              className="text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 border bg-blue-900/40 text-blue-300 hover:bg-red-900/40 hover:text-red-300 border-blue-700 hover:border-red-700"
-                            >
-                              {isToggling ? '...' : 'Remover'}
-                            </button>
-                          ) : null}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
+                <>
+                  <RoundsHeader recentRounds={recentRounds} hasAction />
+                  <div className="divide-y divide-gray-800/50">
+                    {poolDraft.map(p => {
+                      const isManual = eligibleIds.has(p.cartola_id);
+                      const isToggling = togglingId === p.cartola_id;
+                      return (
+                        <div
+                          key={p.cartola_id}
+                          className={isManual ? 'border-l-2 border-blue-500 rounded-r-lg' : ''}
+                        >
+                          <PlayerRow
+                            player={p}
+                            match={clubMatches[p.club_id] || clubMatches[String(p.club_id)] || null}
+                            recentRounds={recentRounds}
+                            action={isManual ? (
+                              <button
+                                onClick={() => handleToggleEligible(p.cartola_id)}
+                                disabled={isToggling}
+                                className="text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 border bg-blue-900/40 text-blue-300 hover:bg-red-900/40 hover:text-red-300 border-blue-700 hover:border-red-700"
+                              >
+                                {isToggling ? '...' : 'Remover'}
+                              </button>
+                            ) : null}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </div>
 
@@ -745,36 +781,40 @@ export default function Admin({ onBack }) {
             {outros.length === 0 ? (
               <p className="text-gray-600 text-sm text-center py-4">Nenhum com os filtros atuais</p>
             ) : (
-              <div className="divide-y divide-gray-800/50">
-                {outros.map(p => {
-                  const isEligible = eligibleIds.has(p.cartola_id);
-                  const isToggling = togglingId === p.cartola_id;
-                  return (
-                    <div
-                      key={p.cartola_id}
-                      className={isEligible ? 'border-l-2 border-blue-500 rounded-r-lg' : ''}
-                    >
-                      <PlayerRow
-                        player={p}
-                        match={clubMatches[p.club_id] || clubMatches[String(p.club_id)] || null}
-                        action={
-                          <button
-                            onClick={() => handleToggleEligible(p.cartola_id)}
-                            disabled={isToggling}
-                            className={`text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 border ${
-                              isEligible
-                                ? 'bg-blue-900/40 text-blue-300 hover:bg-red-900/40 hover:text-red-300 border-blue-700 hover:border-red-700'
-                                : 'bg-gray-800 text-gray-400 hover:bg-green-900/40 hover:text-green-300 border-gray-700 hover:border-green-700'
-                            }`}
-                          >
-                            {isToggling ? '...' : isEligible ? '✓ Adicionado' : '+ Adicionar'}
-                          </button>
-                        }
-                      />
-                    </div>
-                  );
-                })}
-              </div>
+              <>
+                <RoundsHeader recentRounds={recentRounds} hasAction />
+                <div className="divide-y divide-gray-800/50">
+                  {outros.map(p => {
+                    const isEligible = eligibleIds.has(p.cartola_id);
+                    const isToggling = togglingId === p.cartola_id;
+                    return (
+                      <div
+                        key={p.cartola_id}
+                        className={isEligible ? 'border-l-2 border-blue-500 rounded-r-lg' : ''}
+                      >
+                        <PlayerRow
+                          player={p}
+                          match={clubMatches[p.club_id] || clubMatches[String(p.club_id)] || null}
+                          recentRounds={recentRounds}
+                          action={
+                            <button
+                              onClick={() => handleToggleEligible(p.cartola_id)}
+                              disabled={isToggling}
+                              className={`text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 border ${
+                                isEligible
+                                  ? 'bg-blue-900/40 text-blue-300 hover:bg-red-900/40 hover:text-red-300 border-blue-700 hover:border-red-700'
+                                  : 'bg-gray-800 text-gray-400 hover:bg-green-900/40 hover:text-green-300 border-gray-700 hover:border-green-700'
+                              }`}
+                            >
+                              {isToggling ? '...' : isEligible ? '✓ Adicionado' : '+ Adicionar'}
+                            </button>
+                          }
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
 
