@@ -174,6 +174,43 @@ function PlayerRow({ player, match, action, recentRounds = [] }) {
   );
 }
 
+const PAGE_SIZE = 10;
+
+function Pagination({ page, total, onChange }) {
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  if (totalPages <= 1) return null;
+  const start = page * PAGE_SIZE + 1;
+  const end = Math.min((page + 1) * PAGE_SIZE, total);
+  return (
+    <div className="flex items-center justify-between px-3 pt-2 pb-1 border-t border-gray-800 mt-1">
+      <span className="text-xs text-gray-600">{start}–{end} de {total}</span>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onChange(0)}
+          disabled={page === 0}
+          className="px-1.5 py-1 text-xs text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >«</button>
+        <button
+          onClick={() => onChange(page - 1)}
+          disabled={page === 0}
+          className="px-2 py-1 text-xs text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >‹</button>
+        <span className="text-xs text-gray-400 px-2 font-medium">{page + 1} / {totalPages}</span>
+        <button
+          onClick={() => onChange(page + 1)}
+          disabled={page >= totalPages - 1}
+          className="px-2 py-1 text-xs text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >›</button>
+        <button
+          onClick={() => onChange(totalPages - 1)}
+          disabled={page >= totalPages - 1}
+          className="px-1.5 py-1 text-xs text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >»</button>
+      </div>
+    </div>
+  );
+}
+
 // Reusable position tab row
 function PosFilter({ value, onChange, players, countStatus }) {
   return (
@@ -229,16 +266,18 @@ export default function Admin({ onBack }) {
   const [eligibleIds, setEligibleIds] = useState(new Set());
   const [excludedIds, setExcludedIds] = useState(new Set()); // prováveis excluídos manualmente do pool
 
-  // Table 1 (titulares) filters + sort
+  // Table 1 (titulares) filters + sort + page
   const [tPos, setTPos] = useState(0);
   const [tClub, setTClub] = useState(0);
   const [tSort, setTSort] = useState({ col: 'position', dir: 1 });
+  const [tPage, setTPage] = useState(0);
 
-  // Table 2 (outros) filters + sort
+  // Table 2 (outros) filters + sort + page
   const [oPos, setOPos] = useState(0);
   const [oStatus, setOStatus] = useState(0);
   const [oClub, setOClub] = useState(0);
   const [oSort, setOSort] = useState({ col: 'position', dir: 1 });
+  const [oPage, setOPage] = useState(0);
 
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -455,6 +494,10 @@ export default function Admin({ onBack }) {
       .filter(p => oClub === 0   || p.club_id === oClub);
     return applySort(list, oSort);
   }, [players, eligibleIds, excludedIds, oPos, oStatus, oClub, oSort]);
+
+  // Reset pages when filters or sort change
+  useEffect(() => { setTPage(0); }, [tPos, tClub, tSort, eligibleIds, excludedIds]);
+  useEffect(() => { setOPage(0); }, [oPos, oStatus, oClub, oSort, eligibleIds, excludedIds]);
 
   return (
     <div className="min-h-screen p-4 max-w-6xl mx-auto">
@@ -739,7 +782,7 @@ export default function Admin({ onBack }) {
                 <div className="overflow-x-auto">
                   <div style={{ minWidth: '620px' }}>
                     <RoundsHeader recentRounds={recentRounds} sort={tSort} onSort={setTSort} />
-                    {poolDraft.map(p => {
+                    {poolDraft.slice(tPage * PAGE_SIZE, (tPage + 1) * PAGE_SIZE).map(p => {
                       const isManual = eligibleIds.has(p.cartola_id);
                       const isToggling = togglingId === p.cartola_id;
                       return (
@@ -764,6 +807,7 @@ export default function Admin({ onBack }) {
                         </div>
                       );
                     })}
+                    <Pagination page={tPage} total={poolDraft.length} onChange={setTPage} />
                   </div>
                 </div>
               )}
@@ -865,7 +909,7 @@ export default function Admin({ onBack }) {
               <div className="overflow-x-auto">
                 <div style={{ minWidth: '620px' }}>
                   <RoundsHeader recentRounds={recentRounds} sort={oSort} onSort={setOSort} />
-                  {outros.map(p => {
+                  {outros.slice(oPage * PAGE_SIZE, (oPage + 1) * PAGE_SIZE).map(p => {
                     const isEligible = eligibleIds.has(p.cartola_id);
                     const isExcluded = excludedIds.has(p.cartola_id);
                     const isToggling = togglingId === p.cartola_id;
@@ -902,6 +946,7 @@ export default function Admin({ onBack }) {
                       </div>
                     );
                   })}
+                  <Pagination page={oPage} total={outros.length} onChange={setOPage} />
                 </div>
               </div>
             )}
