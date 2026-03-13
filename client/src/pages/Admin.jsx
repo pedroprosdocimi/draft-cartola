@@ -67,8 +67,18 @@ function PlayerRow({ player, match, action }) {
       </span>
       <StatusBadge statusId={player.status_id} />
       <div className="text-right flex-shrink-0">
-        <div className="text-sm font-semibold text-cartola-gold">{(player.average_score || 0).toFixed(1)}</div>
-        <div className="text-xs text-gray-600">C${(player.price || 0).toFixed(1)}</div>
+        {(() => {
+          const last = player.recentScores?.[0]?.score;
+          const color = last == null ? 'text-gray-500' : last >= 6 ? 'text-green-400' : last >= 3 ? 'text-cartola-gold' : 'text-red-400';
+          return (
+            <>
+              <div className={`text-sm font-semibold ${color}`}>
+                {last != null ? last.toFixed(1) : '–'}
+              </div>
+              <div className="text-xs text-gray-600">méd {(player.average_score || 0).toFixed(1)}</div>
+            </>
+          );
+        })()}
       </div>
       {action && <div className="flex-shrink-0">{action}</div>}
     </div>

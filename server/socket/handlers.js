@@ -254,17 +254,6 @@ module.exports = function registerHandlers(io) {
 
       const state = getRoomState(roomCode);
 
-      if (result.queued) {
-        // Player is waiting in queue — keep them in lobby with position info
-        socket.emit('parallel_queued', {
-          position: result.position,
-          waitingFor: result.waitingFor,
-        });
-        socket.emit('room_state', state);
-        socket.to(roomCode).emit('room_state', state);
-        return;
-      }
-
       // Player starts immediately — notify others, send draft screen to this player
       socket.to(roomCode).emit('room_state', state);
       socket.emit('draft_started', {

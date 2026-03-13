@@ -35,39 +35,15 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
   });
   const [draftMode, setDraftMode] = useState('realtime');
   const [copied, setCopied] = useState(false);
-  // Queue state for parallel mode
-  const [myQueuePosition, setMyQueuePosition] = useState(null); // null=not clicked, 0=first(drafting), N=waiting
-  const [queueWaitingFor, setQueueWaitingFor] = useState('');
 
   useEffect(() => {
     const onRoomState = (state) => {
       setRoomState(state);
       const me = state.participants?.find(p => p.id === participantId);
       if (me?.formation) setSelectedFormation(me.formation);
-      // Sync queue position from room state
-      if (state.parallelQueue) {
-        const pos = state.parallelQueue.indexOf(participantId);
-        if (pos >= 0) {
-          setMyQueuePosition(pos);
-          const drafter = state.participants?.find(p => p.id === state.parallelQueue[0]);
-          setQueueWaitingFor(drafter?.name || '...');
-        } else {
-          // Player left the queue (e.g. previous drafter finished) — reset so button reappears
-          setMyQueuePosition(null);
-          setQueueWaitingFor('');
-        }
-      }
-    };
-    const onQueued = ({ position, waitingFor }) => {
-      setMyQueuePosition(position);
-      setQueueWaitingFor(waitingFor);
     };
     socket.on('room_state', onRoomState);
-    socket.on('parallel_queued', onQueued);
-    return () => {
-      socket.off('room_state', onRoomState);
-      socket.off('parallel_queued', onQueued);
-    };
+    return () => { socket.off('room_state', onRoomState); };
   }, [participantId]);
 
   const handleFormation = (f) => {
@@ -115,13 +91,12 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
 
     const me = participants.find(p => p.id === participantId);
     const meCompleted = !!me?.captainId;
-    const isActiveDrafting = !isParallelWaiting; // someone actively in draft screen
-    const meInQueue = myQueuePosition !== null; // already clicked
-    const meCanStart = !meCompleted && !meInQueue;
+    const isSomeoneActive = !isParallelWaiting; // someone is in the draft screen right now
+    const meCanStart = !meCompleted && isParallelWaiting;
 
     const bannerClass = meCompleted
       ? 'bg-cartola-green/10 border-cartola-green'
-      : isActiveDrafting
+      : isSomeoneActive
         ? 'bg-orange-900/20 border-orange-700'
         : meCanStart
           ? 'bg-blue-900/20 border-blue-500'
@@ -147,36 +122,16 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
         <div className={`mb-6 rounded-xl p-4 text-center border ${bannerClass}`}>
           {meCompleted ? (
             <p className="text-cartola-green font-semibold text-lg">✅ Seu draft está completo!</p>
-          ) : isActiveDrafting ? (
+          ) : isSomeoneActive ? (
             <div>
               <p className="text-orange-300 font-semibold">
                 🔄 {parallelCurrentDrafter?.name || '...'} está draftando agora...
               </p>
-              {meInQueue ? (
-                <p className="text-gray-400 text-sm mt-1">
-                  Você está na fila — posição {myQueuePosition}. Aguarde sua vez.
-                </p>
-              ) : (
-                <div className="mt-3">
-                  <p className="text-gray-400 text-xs mb-2">Clique para entrar na fila</p>
-                  <button onClick={handleStartMyTurn} className="btn-primary text-sm px-6 py-2">
-                    🚀 Entrar na fila
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : meInQueue ? (
-            <div>
-              <p className="text-cartola-gold font-semibold">
-                ⏳ Você está na fila — posição {myQueuePosition}
-              </p>
-              <p className="text-gray-500 text-sm mt-1">
-                Aguardando {queueWaitingFor || '...'}
-              </p>
+              <p className="text-gray-400 text-sm mt-1">Aguarde terminar para iniciar o seu.</p>
             </div>
           ) : meCanStart ? (
             <>
-              <p className="text-white font-bold text-lg mb-3">Sua vez de draftar!</p>
+              <p className="text-white font-bold text-lg mb-3">Ninguém draftando! É sua vez.</p>
               <button onClick={handleStartMyTurn} className="btn-primary text-base px-8 py-3">
                 🚀 Iniciar meu Draft
               </button>
