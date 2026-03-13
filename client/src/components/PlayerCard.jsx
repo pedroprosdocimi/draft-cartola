@@ -193,7 +193,7 @@ export default function PlayerCard({
       <button
         onClick={isMyTurn ? onClick : undefined}
         disabled={!isMyTurn}
-        className={`w-full flex flex-col bg-gray-800 border rounded-xl overflow-hidden transition-all text-left
+        className={`w-40 flex-shrink-0 flex flex-col bg-gray-800 border rounded-xl overflow-hidden transition-all text-left
           ${isMyTurn
             ? `border-gray-600 hover:border-cartola-green hover:scale-105 hover:shadow-lg ${POSITION_GLOW[player.position_id]} cursor-pointer active:scale-100`
             : 'border-gray-700 opacity-80 cursor-default'
