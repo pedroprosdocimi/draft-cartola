@@ -201,7 +201,7 @@ function buildSnakeOrder(participantIds, rounds) {
 
 // ── draft start ───────────────────────────────────────────────────────────────
 
-async function startDraft(roomCode, players, clubs, clubMatches, mode = 'realtime') {
+async function startDraft(roomCode, players, clubs, clubMatches, mode = 'realtime', deadline = null) {
   const room = rooms.get(roomCode);
   if (!room) return { error: 'Sala não encontrada.' };
   if (room.status !== 'lobby') return { error: 'Draft já iniciado.' };
@@ -223,6 +223,7 @@ async function startDraft(roomCode, players, clubs, clubMatches, mode = 'realtim
   room.mode = mode;
   room.parallelPhase = mode === 'parallel' ? 'main' : null;
   room.parallelQueue = [];
+  room.deadline = (mode === 'parallel' && deadline) ? new Date(deadline).toISOString() : null;
 
   // Shuffle participants for pick order
   const participantIds = [...room.participants.keys()];
@@ -1004,6 +1005,7 @@ function getRoomState(roomOrCode) {
     currentPickerPositionId: room.currentPickerPositionId || null,
     clubMatches: room.clubMatches || {},
     benchPlayers: room.status === 'bench_drafting' ? (room.benchPlayers || []) : undefined,
+    deadline: room.deadline || null,
   };
 }
 
@@ -1194,6 +1196,108 @@ function rerollOptions(roomCode, participantId, io) {
   return { ok: true };
 }
 
+// ── deadline enforcement ──────────────────────────────────────────────────────
+
+async function enforceDeadline(roomCode, io) {
+  const room = rooms.get(roomCode);
+  if (!room || room.status === 'complete') return;
+  if (room.timer) { clearInterval(room.timer); room.timer = null; }
+  if (room.deadlineTimer) { clearTimeout(room.deadlineTimer); room.deadlineTimer = null; }
+  console.log(`[deadline] enforcing for room ${roomCode}`);
+
+  io.to(roomCode).emit('deadline_reached', { roomCode });
+
+  // Ensure bench players list exists
+  if (!room.benchPlayers) {
+    room.benchPlayers = (room.allPlayers || []).filter(
+      p => p.status_id !== 7 && !room.pickedIds.has(p.cartola_id)
+    );
+  }
+
+  for (const [, participant] of room.participants) {
+    if (participant.captainId) continue;
+
+    // Assign formation if missing
+    if (!participant.formation) {
+      const formations = Object.keys(FORMATIONS);
+      participant.formation = formations[Math.floor(Math.random() * formations.length)];
+      await pool.query(
+        `UPDATE draft_participants SET formation = $1 WHERE id = $2`,
+        [participant.formation, participant.id]
+      );
+    }
+
+    // Fill main picks
+    let needed = getNeededPositions(participant);
+    while (needed.length > 0) {
+      needed.sort((a, b) => b.remaining - a.remaining);
+      const n = needed[0];
+      const available = (room.players || []).filter(
+        p => p.position_id === n.posId && !room.pickedIds.has(p.cartola_id)
+      );
+      if (!available.length) {
+        needed = needed.filter(x => x.posId !== n.posId);
+        continue;
+      }
+      const pick = available[Math.floor(Math.random() * available.length)];
+      room.pickedIds.add(pick.cartola_id);
+      room.pickNumber++;
+      participant.picks.push({ ...pick, position_id: n.posId, picked_at: new Date().toISOString() });
+      await pool.query(
+        `INSERT INTO draft_picks (session_id, participant_id, cartola_id, position_id, overall_pick, picked_at) VALUES ($1,$2,$3,$4,$5,$6)`,
+        [room.code, participant.id, pick.cartola_id, n.posId, room.pickNumber, new Date().toISOString()]
+      );
+      needed = getNeededPositions(participant);
+    }
+
+    // Refresh bench players
+    room.benchPlayers = (room.allPlayers || []).filter(
+      p => p.status_id !== 7 && !room.pickedIds.has(p.cartola_id)
+    );
+
+    // Fill bench picks
+    for (const slotId of getBenchNeededSlots(participant)) {
+      const slot = BENCH_SLOTS[slotId];
+      const available = room.benchPlayers.filter(
+        p => slot.allowedPositions.includes(p.position_id) && !room.pickedIds.has(p.cartola_id)
+      );
+      if (!available.length) continue;
+      const pick = available[Math.floor(Math.random() * available.length)];
+      room.pickedIds.add(pick.cartola_id);
+      room.pickNumber++;
+      participant.picks.push({ ...pick, position_id: slotId, picked_at: new Date().toISOString() });
+      await pool.query(
+        `INSERT INTO draft_picks (session_id, participant_id, cartola_id, position_id, overall_pick, picked_at) VALUES ($1,$2,$3,$4,$5,$6)`,
+        [room.code, participant.id, pick.cartola_id, slotId, room.pickNumber, new Date().toISOString()]
+      );
+      room.benchPlayers = room.benchPlayers.filter(p => p.cartola_id !== pick.cartola_id);
+    }
+
+    // Pick captain
+    const starters = participant.picks.filter(p => !BENCH_SLOT_IDS.includes(p.position_id));
+    if (starters.length > 0) {
+      const captain = starters[Math.floor(Math.random() * starters.length)];
+      participant.captainId = captain.cartola_id;
+      await pool.query(
+        `UPDATE draft_participants SET captain_cartola_id = $1 WHERE id = $2`,
+        [captain.cartola_id, participant.id]
+      );
+    }
+  }
+
+  // Finalize draft
+  room.status = 'complete';
+  room.currentOptions = null;
+  const roundRow = (await pool.query('SELECT round_number FROM rounds ORDER BY id DESC LIMIT 1')).rows[0];
+  await pool.query(
+    `UPDATE draft_sessions SET completed_at = $1, status = 'complete', round_number = $2, pick_number = $3 WHERE id = $4`,
+    [new Date().toISOString(), roundRow?.round_number || null, room.pickNumber, room.code]
+  );
+
+  io.to(room.code).emit('draft_complete', { teams: buildTeams(room) });
+  console.log(`[deadline] draft complete for room ${roomCode}`);
+}
+
 module.exports = {
   createRoom,
   joinRoom,
@@ -1215,6 +1319,7 @@ module.exports = {
   getStarterOptions,
   adminForcePick,
   adminSimAll,
+  enforceDeadline,
   adminRemovePick,
   adminAddPick,
   FORMATIONS,

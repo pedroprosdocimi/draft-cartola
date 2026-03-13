@@ -136,6 +136,11 @@ export default function App() {
       window.history.replaceState(null, '', '/');
     });
 
+    socket.on('deadline_reached', () => {
+      setError('⏰ Prazo atingido! Finalizando draft automaticamente...');
+      setTimeout(() => setError(null), 5000);
+    });
+
     socket.on('coins_updated', ({ coins }) => {
       setUser(prev => prev ? { ...prev, coins } : prev);
     });
@@ -158,6 +163,7 @@ export default function App() {
       socket.off('loading');
       socket.off('draft_started');
       socket.off('draft_complete');
+      socket.off('deadline_reached');
       socket.off('error');
       socket.off('coins_updated');
     };

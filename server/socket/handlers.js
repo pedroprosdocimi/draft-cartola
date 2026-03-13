@@ -19,6 +19,7 @@ const {
   adminSimAll,
   adminRemovePick,
   adminAddPick,
+  enforceDeadline,
   SPECTATOR_ADMIN_ID,
 } = require('../services/draftManager');
 const { getPlayersAndClubs } = require('../services/cartola');
@@ -164,7 +165,7 @@ module.exports = function registerHandlers(io) {
       io.to(roomCode).emit('room_state', getRoomState(roomCode));
     });
 
-    socket.on('start_draft', async ({ roomCode, participantId, mode }) => {
+    socket.on('start_draft', async ({ roomCode, participantId, mode, deadline }) => {
       const room = getRoom(roomCode);
       if (!room) return socket.emit('error', { message: 'Sala não encontrada.' });
       if (room.adminId !== participantId) return socket.emit('error', { message: 'Apenas o admin pode iniciar.' });
@@ -173,7 +174,7 @@ module.exports = function registerHandlers(io) {
         io.to(roomCode).emit('loading', { message: 'Carregando jogadores do banco local...' });
         const { players, clubs, clubMatches } = await getPlayersAndClubs();
 
-        const result = await startDraft(roomCode, players, clubs, clubMatches, mode || 'realtime');
+        const result = await startDraft(roomCode, players, clubs, clubMatches, mode || 'realtime', deadline || null);
         if (result.error) return socket.emit('error', { message: result.error });
 
         const state = getRoomState(roomCode);
@@ -181,6 +182,26 @@ module.exports = function registerHandlers(io) {
         if (mode === 'parallel') {
           // Parallel: everyone stays in lobby waiting for their turn
           io.to(roomCode).emit('room_state', state);
+
+          // Set deadline timer if provided
+          if (deadline) {
+            const msUntilDeadline = new Date(deadline) - new Date();
+            if (msUntilDeadline > 0) {
+              const updatedRoom = getRoom(roomCode);
+              if (updatedRoom) {
+                updatedRoom.deadlineTimer = setTimeout(() => {
+                  enforceDeadline(roomCode, io).catch(e => {
+                    console.error('[deadline] error:', e);
+                  });
+                }, msUntilDeadline);
+              }
+            } else {
+              // Deadline already passed — enforce immediately
+              enforceDeadline(roomCode, io).catch(e => {
+                console.error('[deadline] error:', e);
+              });
+            }
+          }
         } else {
           io.to(roomCode).emit('draft_started', {
             players,

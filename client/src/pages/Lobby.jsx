@@ -34,6 +34,7 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
     return me?.formation || null;
   });
   const [draftMode, setDraftMode] = useState('realtime');
+  const [deadline, setDeadline] = useState('');
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -52,7 +53,12 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
   };
 
   const handleStartDraft = () => {
-    socket.emit('start_draft', { roomCode, participantId, mode: draftMode });
+    socket.emit('start_draft', {
+      roomCode,
+      participantId,
+      mode: draftMode,
+      deadline: (draftMode === 'parallel' && deadline) ? deadline : null,
+    });
   };
 
   const handleLeave = () => {
@@ -77,6 +83,7 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
   const isParallelWaiting = roomState?.status === 'parallel_waiting';
   const currentPickerId = roomState?.currentPickerId;
   const parallelCurrentDrafter = roomState?.participants?.find(p => p.id === currentPickerId);
+  const roomDeadline = roomState?.deadline ? new Date(roomState.deadline) : null;
 
   const handleStartMyTurn = () => {
     socket.emit('start_my_turn', { roomCode, participantId });
@@ -120,6 +127,11 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
           <div className="mt-2 inline-flex items-center gap-1.5 bg-blue-900/30 border border-blue-700/50 text-blue-300 text-xs font-semibold px-3 py-1 rounded-full">
             👤 Fase: {phaseLabel}
           </div>
+          {roomDeadline && (
+            <div className="mt-2 inline-flex items-center gap-1.5 bg-orange-900/30 border border-orange-700/50 text-orange-300 text-xs font-semibold px-3 py-1 rounded-full">
+              ⏰ Prazo: {roomDeadline.toLocaleString('pt-BR')}
+            </div>
+          )}
         </div>
 
         {/* Banner: my state */}
@@ -356,6 +368,22 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
                   : 'Cada jogador faz todos os seus picks de uma vez, um por vez'}
               </p>
             </div>
+
+            {/* Deadline — parallel only */}
+            {draftMode === 'parallel' && (
+              <div className="space-y-1">
+                <p className="text-sm text-gray-400">Prazo limite <span className="text-gray-600">(opcional)</span></p>
+                <input
+                  type="datetime-local"
+                  value={deadline}
+                  onChange={e => setDeadline(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                />
+                <p className="text-xs text-gray-600">
+                  Ao atingir o prazo, times incompletos serão gerados automaticamente e o draft será finalizado.
+                </p>
+              </div>
+            )}
 
             <button
               onClick={handleStartDraft}
