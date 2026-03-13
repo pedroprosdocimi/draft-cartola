@@ -93,7 +93,9 @@ async function createRoom(participantName, socketId, entryFee = 0, spectate = fa
 async function joinRoom(roomCode, participantName, socketId) {
   const room = rooms.get(roomCode);
   if (!room) return { error: 'Sala não encontrada.' };
-  if (room.status !== 'lobby') return { error: 'Draft já iniciado.' };
+  if (room.status === 'complete') return { error: 'Este draft já foi concluído.' };
+  // Allow joining mid-draft only in parallel mode
+  if (room.status !== 'lobby' && room.mode !== 'parallel') return { error: 'Draft já iniciado.' };
 
   const participantId = uuidv4();
   room.participants.set(participantId, {

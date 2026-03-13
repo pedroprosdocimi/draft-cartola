@@ -91,16 +91,20 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
 
     const me = participants.find(p => p.id === participantId);
     const meCompleted = !!me?.captainId;
+    const meHasFormation = !!me?.formation;
     const isSomeoneActive = !isParallelWaiting; // someone is in the draft screen right now
-    const meCanStart = !meCompleted && isParallelWaiting;
+    const meNeedsFormation = !meCompleted && !meHasFormation;
+    const meCanStart = !meCompleted && meHasFormation && isParallelWaiting;
 
     const bannerClass = meCompleted
       ? 'bg-cartola-green/10 border-cartola-green'
-      : isSomeoneActive
-        ? 'bg-orange-900/20 border-orange-700'
-        : meCanStart
-          ? 'bg-blue-900/20 border-blue-500'
-          : 'bg-gray-800/50 border-gray-700';
+      : meNeedsFormation
+        ? 'bg-purple-900/20 border-purple-700'
+        : isSomeoneActive
+          ? 'bg-orange-900/20 border-orange-700'
+          : meCanStart
+            ? 'bg-blue-900/20 border-blue-500'
+            : 'bg-gray-800/50 border-gray-700';
 
     return (
       <div className="min-h-screen p-4 max-w-2xl mx-auto">
@@ -119,9 +123,38 @@ export default function Lobby({ roomCode, participantId, isAdmin, initialState, 
         </div>
 
         {/* Banner: my state */}
-        <div className={`mb-6 rounded-xl p-4 text-center border ${bannerClass}`}>
+        <div className={`mb-6 rounded-xl p-4 border ${bannerClass} ${meNeedsFormation ? 'text-left' : 'text-center'}`}>
           {meCompleted ? (
-            <p className="text-cartola-green font-semibold text-lg">✅ Seu draft está completo!</p>
+            <p className="text-cartola-green font-semibold text-lg text-center">✅ Seu draft está completo!</p>
+          ) : meNeedsFormation ? (
+            <>
+              <p className="text-purple-300 font-semibold mb-3 text-center">Escolha sua formação para participar</p>
+              <div className="space-y-2">
+                {FORMATIONS.map(f => {
+                  const details = FORMATION_DETAILS[f];
+                  return (
+                    <button
+                      key={f}
+                      onClick={() => handleFormation(f)}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg border transition-all ${
+                        selectedFormation === f
+                          ? 'border-cartola-green bg-cartola-green/20 text-white'
+                          : 'border-gray-700 hover:border-gray-600 text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold">{f}</span>
+                        <div className="flex gap-1.5 text-xs text-gray-500">
+                          {Object.entries(details).filter(([, v]) => v > 0).map(([pos, count]) => (
+                            <span key={pos}>{count}×{pos}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
           ) : isSomeoneActive ? (
             <div>
               <p className="text-orange-300 font-semibold">
