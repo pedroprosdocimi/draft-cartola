@@ -57,20 +57,61 @@ function colTemplate(nRounds) {
   return `36px minmax(120px, 220px) 50px 90px repeat(${nRounds}, 54px) 54px 90px`;
 }
 
-function RoundsHeader({ recentRounds }) {
+const STATUS_SORT_ORDER = { 7: 0, 2: 1, 5: 2, 3: 3, 6: 4 };
+
+function applySort(list, { col, dir }) {
+  if (!col) return list;
+  return [...list].sort((a, b) => {
+    if (col === 'name') return dir * (a.nickname || '').localeCompare(b.nickname || '');
+    let va, vb;
+    if (col === 'position') {
+      va = POS_SORT[a.position_id] ?? 9;
+      vb = POS_SORT[b.position_id] ?? 9;
+    } else if (col === 'status') {
+      va = STATUS_SORT_ORDER[a.status_id] ?? 9;
+      vb = STATUS_SORT_ORDER[b.status_id] ?? 9;
+    } else if (col === 'avg') {
+      va = a.average_score || 0;
+      vb = b.average_score || 0;
+    } else if (col.startsWith('round_')) {
+      const round = Number(col.slice(6));
+      va = a.recentScores?.find(s => s.round === round)?.score ?? 0;
+      vb = b.recentScores?.find(s => s.round === round)?.score ?? 0;
+    } else {
+      return 0;
+    }
+    return dir * (va > vb ? 1 : va < vb ? -1 : 0);
+  });
+}
+
+function SortTh({ col, children, sort, onSort, defaultDir = 1, align = 'center' }) {
+  const active = sort.col === col;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort({ col, dir: active ? -sort.dir : defaultDir })}
+      className={`w-full text-${align} text-xs font-semibold uppercase tracking-wide cursor-pointer select-none transition-colors hover:text-gray-200 ${active ? 'text-white' : 'text-gray-500'}`}
+    >
+      {children}
+      <span className="ml-0.5 opacity-60">{active ? (sort.dir === 1 ? '↑' : '↓') : ''}</span>
+    </button>
+  );
+}
+
+function RoundsHeader({ recentRounds, sort, onSort }) {
   return (
     <div
-      className="grid items-center gap-x-2 px-3 py-1.5 border-b border-gray-700 text-xs font-semibold text-gray-500 uppercase tracking-wide"
+      className="grid items-center gap-x-2 px-3 py-1.5 border-b border-gray-700"
       style={{ gridTemplateColumns: colTemplate(recentRounds.length) }}
     >
       <div />
-      <div className="pl-1">Jogador</div>
-      <div className="text-center">Pos</div>
-      <div className="text-center">Status</div>
+      <SortTh col="name" sort={sort} onSort={onSort} defaultDir={1} align="left">Jogador</SortTh>
+      <SortTh col="position" sort={sort} onSort={onSort} defaultDir={1}>Pos</SortTh>
+      <SortTh col="status" sort={sort} onSort={onSort} defaultDir={1}>Status</SortTh>
       {recentRounds.map(r => (
-        <div key={r} className="text-center">Rd {r}</div>
+        <SortTh key={r} col={`round_${r}`} sort={sort} onSort={onSort} defaultDir={-1}>Rd {r}</SortTh>
       ))}
-      <div className="text-center">Méd</div>
+      <SortTh col="avg" sort={sort} onSort={onSort} defaultDir={-1}>Méd</SortTh>
       <div />
     </div>
   );
@@ -188,14 +229,16 @@ export default function Admin({ onBack }) {
   const [eligibleIds, setEligibleIds] = useState(new Set());
   const [excludedIds, setExcludedIds] = useState(new Set()); // prováveis excluídos manualmente do pool
 
-  // Table 1 (titulares) filters
+  // Table 1 (titulares) filters + sort
   const [tPos, setTPos] = useState(0);
   const [tClub, setTClub] = useState(0);
+  const [tSort, setTSort] = useState({ col: 'position', dir: 1 });
 
-  // Table 2 (outros) filters
+  // Table 2 (outros) filters + sort
   const [oPos, setOPos] = useState(0);
   const [oStatus, setOStatus] = useState(0);
   const [oClub, setOClub] = useState(0);
+  const [oSort, setOSort] = useState({ col: 'position', dir: 1 });
 
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -388,8 +431,8 @@ export default function Admin({ onBack }) {
       .filter(p => (p.status_id === 7 || eligibleIds.has(p.cartola_id)) && !excludedIds.has(p.cartola_id))
       .filter(p => tPos === 0  || p.position_id === tPos)
       .filter(p => tClub === 0 || p.club_id === tClub);
-    return sortByPos(list);
-  }, [players, eligibleIds, excludedIds, tPos, tClub]);
+    return applySort(list, tSort);
+  }, [players, eligibleIds, excludedIds, tPos, tClub, tSort]);
 
   // Club counts for the pool draft sidebar (respects tPos + tClub filters)
   // Shows ALL clubs (even those with 0 after filtering)
@@ -410,8 +453,8 @@ export default function Admin({ onBack }) {
       .filter(p => oPos === 0    || p.position_id === oPos)
       .filter(p => oStatus === 0 || p.status_id === oStatus)
       .filter(p => oClub === 0   || p.club_id === oClub);
-    return sortByPos(list);
-  }, [players, eligibleIds, excludedIds, oPos, oStatus, oClub]);
+    return applySort(list, oSort);
+  }, [players, eligibleIds, excludedIds, oPos, oStatus, oClub, oSort]);
 
   return (
     <div className="min-h-screen p-4 max-w-6xl mx-auto">
@@ -695,7 +738,7 @@ export default function Admin({ onBack }) {
               ) : (
                 <div className="overflow-x-auto">
                   <div style={{ minWidth: '620px' }}>
-                    <RoundsHeader recentRounds={recentRounds} />
+                    <RoundsHeader recentRounds={recentRounds} sort={tSort} onSort={setTSort} />
                     {poolDraft.map(p => {
                       const isManual = eligibleIds.has(p.cartola_id);
                       const isToggling = togglingId === p.cartola_id;
@@ -821,7 +864,7 @@ export default function Admin({ onBack }) {
             ) : (
               <div className="overflow-x-auto">
                 <div style={{ minWidth: '620px' }}>
-                  <RoundsHeader recentRounds={recentRounds} />
+                  <RoundsHeader recentRounds={recentRounds} sort={oSort} onSort={setOSort} />
                   {outros.map(p => {
                     const isEligible = eligibleIds.has(p.cartola_id);
                     const isExcluded = excludedIds.has(p.cartola_id);
