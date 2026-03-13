@@ -54,7 +54,7 @@ function scoreColor(score) {
 
 // Grid template: photo | name | pos | status | rd×N | avg | action
 function colTemplate(nRounds) {
-  return `36px 1fr 50px 90px repeat(${nRounds}, 54px) 54px 80px`;
+  return `36px minmax(120px, 220px) 50px 90px repeat(${nRounds}, 54px) 54px 90px`;
 }
 
 function RoundsHeader({ recentRounds }) {
@@ -186,6 +186,7 @@ export default function Admin({ onBack }) {
   const [clubMatches, setClubMatches] = useState({});
   const [syncStatus, setSyncStatus] = useState(null);
   const [eligibleIds, setEligibleIds] = useState(new Set());
+  const [excludedIds, setExcludedIds] = useState(new Set()); // prováveis excluídos manualmente do pool
 
   // Table 1 (titulares) filters
   const [tPos, setTPos] = useState(0);
@@ -351,6 +352,18 @@ export default function Admin({ onBack }) {
     }
   };
 
+  const handleRemoveFromPool = (cartolaId) => {
+    if (eligibleIds.has(cartolaId)) {
+      handleToggleEligible(cartolaId); // remove from eligible list (persisted)
+    } else {
+      setExcludedIds(prev => new Set([...prev, cartolaId])); // exclude probable locally
+    }
+  };
+
+  const handleRestoreToPool = (cartolaId) => {
+    setExcludedIds(prev => { const next = new Set(prev); next.delete(cartolaId); return next; });
+  };
+
   // Top 3 most recent round numbers across all players
   const recentRounds = useMemo(() => {
     const roundSet = new Set();
@@ -369,14 +382,14 @@ export default function Admin({ onBack }) {
       .sort((a, b) => (a.abbreviation || '').localeCompare(b.abbreviation || ''));
   }, [players]);
 
-  // Table 1: pool do draft = prováveis (status_id=7) + adicionados manualmente
+  // Table 1: pool do draft = prováveis (status_id=7) + adicionados manualmente, exceto excluídos
   const poolDraft = useMemo(() => {
     const list = players
-      .filter(p => p.status_id === 7 || eligibleIds.has(p.cartola_id))
+      .filter(p => (p.status_id === 7 || eligibleIds.has(p.cartola_id)) && !excludedIds.has(p.cartola_id))
       .filter(p => tPos === 0  || p.position_id === tPos)
       .filter(p => tClub === 0 || p.club_id === tClub);
     return sortByPos(list);
-  }, [players, eligibleIds, tPos, tClub]);
+  }, [players, eligibleIds, excludedIds, tPos, tClub]);
 
   // Club counts for the pool draft sidebar (respects tPos + tClub filters)
   // Shows ALL clubs (even those with 0 after filtering)
@@ -390,15 +403,15 @@ export default function Admin({ onBack }) {
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   }, [poolDraft, clubs]);
 
-  // Table 2: não cotados que ainda NÃO foram adicionados ao pool
+  // Table 2: não cotados que ainda NÃO foram adicionados ao pool (+ prováveis excluídos manualmente)
   const outros = useMemo(() => {
     const list = players
-      .filter(p => p.status_id !== 7 && !eligibleIds.has(p.cartola_id))
+      .filter(p => (p.status_id !== 7 || excludedIds.has(p.cartola_id)) && !eligibleIds.has(p.cartola_id))
       .filter(p => oPos === 0    || p.position_id === oPos)
       .filter(p => oStatus === 0 || p.status_id === oStatus)
       .filter(p => oClub === 0   || p.club_id === oClub);
     return sortByPos(list);
-  }, [players, eligibleIds, oPos, oStatus, oClub]);
+  }, [players, eligibleIds, excludedIds, oPos, oStatus, oClub]);
 
   return (
     <div className="min-h-screen p-4 max-w-6xl mx-auto">
@@ -681,7 +694,7 @@ export default function Admin({ onBack }) {
                 <p className="text-gray-600 text-sm text-center py-4">Nenhum com os filtros atuais</p>
               ) : (
                 <div className="overflow-x-auto">
-                  <div style={{ minWidth: '560px' }}>
+                  <div style={{ minWidth: '620px' }}>
                     <RoundsHeader recentRounds={recentRounds} />
                     {poolDraft.map(p => {
                       const isManual = eligibleIds.has(p.cartola_id);
@@ -695,15 +708,15 @@ export default function Admin({ onBack }) {
                             player={p}
                             match={clubMatches[p.club_id] || clubMatches[String(p.club_id)] || null}
                             recentRounds={recentRounds}
-                            action={isManual ? (
+                            action={
                               <button
-                                onClick={() => handleToggleEligible(p.cartola_id)}
+                                onClick={() => handleRemoveFromPool(p.cartola_id)}
                                 disabled={isToggling}
-                                className="text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 border bg-blue-900/40 text-blue-300 hover:bg-red-900/40 hover:text-red-300 border-blue-700 hover:border-red-700"
+                                className="whitespace-nowrap text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 border bg-gray-800 text-gray-400 hover:bg-red-900/40 hover:text-red-300 border-gray-700 hover:border-red-700"
                               >
                                 {isToggling ? '...' : 'Remover'}
                               </button>
-                            ) : null}
+                            }
                           />
                         </div>
                       );
@@ -807,10 +820,11 @@ export default function Admin({ onBack }) {
               <p className="text-gray-600 text-sm text-center py-4">Nenhum com os filtros atuais</p>
             ) : (
               <div className="overflow-x-auto">
-                <div style={{ minWidth: '560px' }}>
+                <div style={{ minWidth: '620px' }}>
                   <RoundsHeader recentRounds={recentRounds} />
                   {outros.map(p => {
                     const isEligible = eligibleIds.has(p.cartola_id);
+                    const isExcluded = excludedIds.has(p.cartola_id);
                     const isToggling = togglingId === p.cartola_id;
                     return (
                       <div
@@ -821,11 +835,18 @@ export default function Admin({ onBack }) {
                           player={p}
                           match={clubMatches[p.club_id] || clubMatches[String(p.club_id)] || null}
                           recentRounds={recentRounds}
-                          action={
+                          action={isExcluded ? (
+                            <button
+                              onClick={() => handleRestoreToPool(p.cartola_id)}
+                              className="whitespace-nowrap text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors border bg-orange-900/30 text-orange-300 hover:bg-green-900/40 hover:text-green-300 border-orange-700/50 hover:border-green-700"
+                            >
+                              ↩ Restaurar
+                            </button>
+                          ) : (
                             <button
                               onClick={() => handleToggleEligible(p.cartola_id)}
                               disabled={isToggling}
-                              className={`text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 border ${
+                              className={`whitespace-nowrap text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 border ${
                                 isEligible
                                   ? 'bg-blue-900/40 text-blue-300 hover:bg-red-900/40 hover:text-red-300 border-blue-700 hover:border-red-700'
                                   : 'bg-gray-800 text-gray-400 hover:bg-green-900/40 hover:text-green-300 border-gray-700 hover:border-green-700'
@@ -833,7 +854,7 @@ export default function Admin({ onBack }) {
                             >
                               {isToggling ? '...' : isEligible ? '✓ Adicionado' : '+ Adicionar'}
                             </button>
-                          }
+                          )}
                         />
                       </div>
                     );
