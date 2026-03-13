@@ -180,7 +180,7 @@ export default function PickPanel({
             </p>
           </div>
           {/* Mobile: vertical stack · Desktop: centered wrap */}
-          <div className="flex flex-row flex-wrap gap-3 justify-center w-full max-w-full items-start">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 w-full max-w-2xl">
             {offeredPlayers.map(player => (
               <PlayerCard
                 key={player.cartola_id}

@@ -193,7 +193,7 @@ export default function PlayerCard({
       <button
         onClick={isMyTurn ? onClick : undefined}
         disabled={!isMyTurn}
-        className={`w-44 flex-shrink-0 flex flex-col bg-gray-800 border rounded-xl overflow-hidden transition-all text-left snap-start
+        className={`w-full flex flex-col bg-gray-800 border rounded-xl overflow-hidden transition-all text-left
           ${isMyTurn
             ? `border-gray-600 hover:border-cartola-green hover:scale-105 hover:shadow-lg ${POSITION_GLOW[player.position_id]} cursor-pointer active:scale-100`
             : 'border-gray-700 opacity-80 cursor-default'
@@ -235,16 +235,14 @@ export default function PlayerCard({
                 <div className="text-gray-400 text-xs leading-none mb-0.5">Média</div>
                 <AvgScore score={player.average_score} posAvg={posAvg} />
               </div>
-              {player.recentScores?.length > 0 && (
-                <div>
-                  <div className="text-gray-400 text-xs leading-none mb-0.5">Última</div>
-                  {(() => {
-                    const s = player.recentScores[0].score || 0;
-                    const color = s >= 6 ? 'text-green-400' : s >= 3 ? 'text-cartola-gold' : 'text-red-400';
-                    return <span className={`text-xs font-semibold ${color}`}>{s.toFixed(1)}</span>;
-                  })()}
-                </div>
-              )}
+              <div>
+                <div className="text-gray-400 text-xs leading-none mb-0.5">Última</div>
+                {(() => {
+                  const s = player.recentScores?.[0]?.score ?? 0;
+                  const color = s >= 6 ? 'text-green-400' : s >= 3 ? 'text-cartola-gold' : 'text-red-400';
+                  return <span className={`text-xs font-semibold ${color}`}>{s.toFixed(1)}</span>;
+                })()}
+              </div>
               {posAvg != null && (
                 <div>
                   <div className="text-gray-400 text-xs leading-none mb-0.5">Média pos.</div>
