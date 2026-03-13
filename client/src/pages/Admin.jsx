@@ -47,26 +47,31 @@ function StatusBadge({ statusId }) {
 }
 
 function scoreColor(score) {
-  if (score == null) return 'text-gray-600';
   if (score >= 6) return 'text-green-400';
   if (score >= 3) return 'text-cartola-gold';
   return 'text-red-400';
 }
 
-function RoundsHeader({ recentRounds, hasAction }) {
-  if (!recentRounds.length) return null;
+// Grid template: photo | name | pos | status | rd×N | avg | action
+function colTemplate(nRounds) {
+  return `36px 1fr 50px 90px repeat(${nRounds}, 54px) 54px 80px`;
+}
+
+function RoundsHeader({ recentRounds }) {
   return (
-    <div className="flex items-center gap-2 sm:gap-3 px-3 py-1.5 border-b border-gray-700/50 mb-0.5">
-      <div className="flex-1 min-w-0" />
+    <div
+      className="grid items-center gap-x-2 px-3 py-1.5 border-b border-gray-700 text-xs font-semibold text-gray-500 uppercase tracking-wide"
+      style={{ gridTemplateColumns: colTemplate(recentRounds.length) }}
+    >
+      <div />
+      <div className="pl-1">Jogador</div>
+      <div className="text-center">Pos</div>
+      <div className="text-center">Status</div>
       {recentRounds.map(r => (
-        <div key={r} className="w-11 text-right flex-shrink-0">
-          <span className="text-xs font-bold text-gray-500">Rd {r}</span>
-        </div>
+        <div key={r} className="text-center">Rd {r}</div>
       ))}
-      <div className="w-10 text-right flex-shrink-0">
-        <span className="text-xs text-gray-600">méd</span>
-      </div>
-      {hasAction && <div className="w-16 flex-shrink-0" />}
+      <div className="text-center">Méd</div>
+      <div />
     </div>
   );
 }
@@ -74,36 +79,56 @@ function RoundsHeader({ recentRounds, hasAction }) {
 function PlayerRow({ player, match, action, recentRounds = [] }) {
   const posColor = POS_COLORS[player.position_id] || 'bg-gray-600';
   return (
-    <div className="flex items-center gap-2 sm:gap-3 px-3 py-2 hover:bg-gray-800/50 rounded-lg">
-      <div className="w-8 h-8 rounded-full bg-gray-700 overflow-hidden flex-shrink-0">
+    <div
+      className="grid items-center gap-x-2 px-3 py-2 hover:bg-gray-800/50 rounded-lg border-b border-gray-800/40 last:border-0"
+      style={{ gridTemplateColumns: colTemplate(recentRounds.length) }}
+    >
+      {/* Photo */}
+      <div className="w-8 h-8 rounded-full bg-gray-700 overflow-hidden">
         {player.photo
           ? <img src={player.photo} alt={player.nickname} className="w-full h-full object-cover" />
           : <div className="w-full h-full flex items-center justify-center text-gray-600 text-xs">?</div>}
       </div>
-      <div className="flex-1 min-w-0">
+
+      {/* Name + club + match */}
+      <div className="min-w-0 pl-1">
         <div className="font-medium text-sm text-white truncate">{player.nickname}</div>
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-gray-500 truncate">
           {player.club?.abbreviation || `Clube ${player.club_id}`}
           {match && <span className="text-gray-600 ml-1">· {match}</span>}
         </div>
       </div>
-      <span className={`${posColor} text-white text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0 hidden sm:inline`}>
-        {POS_LABELS[player.position_id]}
-      </span>
-      <StatusBadge statusId={player.status_id} />
+
+      {/* Position */}
+      <div className="flex justify-center">
+        <span className={`${posColor} text-white text-xs font-bold px-1.5 py-0.5 rounded`}>
+          {POS_LABELS[player.position_id]}
+        </span>
+      </div>
+
+      {/* Status */}
+      <div className="flex justify-center">
+        <StatusBadge statusId={player.status_id} />
+      </div>
+
+      {/* Last N rounds */}
       {recentRounds.map(round => {
         const s = player.recentScores?.find(e => e.round === round);
-        const score = s?.score;
+        const score = s?.score ?? 0;
         return (
-          <div key={round} className={`w-11 text-right flex-shrink-0 text-sm font-semibold ${scoreColor(score)}`}>
-            {score != null ? score.toFixed(1) : '–'}
+          <div key={round} className={`text-center text-sm font-semibold ${scoreColor(score)}`}>
+            {score.toFixed(1)}
           </div>
         );
       })}
-      <div className="w-10 text-right flex-shrink-0 text-xs text-gray-500">
+
+      {/* Average */}
+      <div className="text-center text-sm text-gray-400 font-medium">
         {(player.average_score || 0).toFixed(1)}
       </div>
-      {action && <div className="flex-shrink-0">{action}</div>}
+
+      {/* Action */}
+      <div className="flex justify-center">{action}</div>
     </div>
   );
 }
@@ -655,9 +680,9 @@ export default function Admin({ onBack }) {
               {poolDraft.length === 0 ? (
                 <p className="text-gray-600 text-sm text-center py-4">Nenhum com os filtros atuais</p>
               ) : (
-                <>
-                  <RoundsHeader recentRounds={recentRounds} hasAction />
-                  <div className="divide-y divide-gray-800/50">
+                <div className="overflow-x-auto">
+                  <div style={{ minWidth: '560px' }}>
+                    <RoundsHeader recentRounds={recentRounds} />
                     {poolDraft.map(p => {
                       const isManual = eligibleIds.has(p.cartola_id);
                       const isToggling = togglingId === p.cartola_id;
@@ -684,7 +709,7 @@ export default function Admin({ onBack }) {
                       );
                     })}
                   </div>
-                </>
+                </div>
               )}
             </div>
 
@@ -781,9 +806,9 @@ export default function Admin({ onBack }) {
             {outros.length === 0 ? (
               <p className="text-gray-600 text-sm text-center py-4">Nenhum com os filtros atuais</p>
             ) : (
-              <>
-                <RoundsHeader recentRounds={recentRounds} hasAction />
-                <div className="divide-y divide-gray-800/50">
+              <div className="overflow-x-auto">
+                <div style={{ minWidth: '560px' }}>
+                  <RoundsHeader recentRounds={recentRounds} />
                   {outros.map(p => {
                     const isEligible = eligibleIds.has(p.cartola_id);
                     const isToggling = togglingId === p.cartola_id;
@@ -814,7 +839,7 @@ export default function Admin({ onBack }) {
                     );
                   })}
                 </div>
-              </>
+              </div>
             )}
           </div>
 
