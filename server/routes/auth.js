@@ -22,7 +22,7 @@ function userPayload(user) {
     nome: user.nome,
     nomeTime: user.nome_time || user.nomeTime,
     isAdmin: user.is_admin === true || user.is_admin === 1,
-    coins: user.coins ?? 100
+    coins: user.coins ?? 30
   };
 }
 
@@ -52,8 +52,8 @@ router.post('/register', async (req, res) => {
 
     const senha_hash = await bcrypt.hash(senha, 10);
     const result = await pool.query(
-      `INSERT INTO users (nome, telefone, username, nome_time, senha_hash, created_at, is_admin)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      `INSERT INTO users (nome, telefone, username, nome_time, senha_hash, created_at, is_admin, coins)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 30) RETURNING id`,
       [nome.trim(), telefone.trim(), username.trim().toLowerCase(), nome_time.trim(), senha_hash, new Date().toISOString(), isAdmin]
     );
 

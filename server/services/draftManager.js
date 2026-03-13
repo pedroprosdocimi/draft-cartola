@@ -265,8 +265,8 @@ async function startDraft(roomCode, players, clubs, clubMatches, mode = 'realtim
 
 // Immediately transitions the current drafter to bench phase (no lobby wait).
 async function startBenchDraftForPlayer(room, participant, io) {
-  room.benchPlayers = (room.allPlayers || []).filter(
-    p => p.status_id !== 7 && !room.pickedIds.has(p.cartola_id)
+  room.benchPlayers = (room.players || []).filter(
+    p => !room.pickedIds.has(p.cartola_id)
   );
   room.draftOrder = [participant.id, participant.id, participant.id];
   room.currentPickIndex = 0;
@@ -488,8 +488,8 @@ async function pickCaptain(roomCode, participantId, cartolaId, io) {
 
 async function startBenchDraft(room, io) {
   // Realtime mode only — parallel mode uses startBenchDraftForPlayer instead
-  room.benchPlayers = (room.allPlayers || []).filter(
-    p => p.status_id !== 7 && !room.pickedIds.has(p.cartola_id)
+  room.benchPlayers = (room.players || []).filter(
+    p => !room.pickedIds.has(p.cartola_id)
   );
 
   const participantIds = [...room.participants.keys()].sort(
@@ -931,8 +931,8 @@ async function restoreRoomsFromDB() {
       participants: participantsMap,
       players: draftPlayers,
       allPlayers,
-      benchPlayers: ['bench_drafting', 'captain_drafting'].includes(session.status) && allPlayers
-        ? allPlayers.filter(p => p.status_id !== 7 && !pickedIds.has(p.cartola_id))
+      benchPlayers: ['bench_drafting', 'captain_drafting'].includes(session.status) && draftPlayers
+        ? draftPlayers.filter(p => !pickedIds.has(p.cartola_id))
         : null,
       clubs,
       clubMatches,
@@ -1209,8 +1209,8 @@ async function enforceDeadline(roomCode, io) {
 
   // Ensure bench players list exists
   if (!room.benchPlayers) {
-    room.benchPlayers = (room.allPlayers || []).filter(
-      p => p.status_id !== 7 && !room.pickedIds.has(p.cartola_id)
+    room.benchPlayers = (room.players || []).filter(
+      p => !room.pickedIds.has(p.cartola_id)
     );
   }
 
@@ -1251,8 +1251,8 @@ async function enforceDeadline(roomCode, io) {
     }
 
     // Refresh bench players
-    room.benchPlayers = (room.allPlayers || []).filter(
-      p => p.status_id !== 7 && !room.pickedIds.has(p.cartola_id)
+    room.benchPlayers = (room.players || []).filter(
+      p => !room.pickedIds.has(p.cartola_id)
     );
 
     // Fill bench picks
